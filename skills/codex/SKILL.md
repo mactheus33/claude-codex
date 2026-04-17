@@ -54,12 +54,12 @@ If either does not exist, treat as empty and plan to create.
 HANDOFF.md is always overwritten. Use this exact structure:
 
 ```markdown
-# Sessão YYYY-MM-DD — <project-name>
+# Session YYYY-MM-DD — <project-name>
 
 ## Handoff
 - <1 line: what was done, final state>
 
-## Próximos passos
+## Next steps
 - <bullets, actionable, prioritized>
 
 ## Blockers
@@ -68,7 +68,7 @@ HANDOFF.md is always overwritten. Use this exact structure:
 
 Rules:
 - One date per file. Previous HANDOFF content is replaced, not appended.
-- No filler. If "Próximos passos" is empty, state "None." Do not invent items.
+- No filler. If "Next steps" is empty, state "None." Do not invent items.
 - Direct, declarative language. No hedging.
 
 ### Step 5: Compose new learnings.md (digest)
@@ -99,7 +99,7 @@ Format:
 - <direct, 1-line lesson>. Why: <optional but useful for non-obvious items>.
 ```
 
-Categories emerge organically from content (e.g. Segurança, Infra, Negócio, Performance). Do not create empty categories.
+Categories emerge organically from content (e.g. Security, Infra, Business, Performance). Do not create empty categories.
 
 ### Step 6: Show drafts, request approval
 
@@ -123,19 +123,19 @@ Ask explicitly: "Approve to write?"
 - **Never append.** Always read → merge → overwrite.
 - **No fabrication.** If the session did not produce a learning, leave the learnings file untouched. Empty is better than invented.
 - **Cross-project learnings** go to the destination project's `memory/incoming-learnings.md`, never direct edit.
-- **Language follows user convention.** If the session was in Portuguese, keep memory in Portuguese. If English, English.
+- **Language:** always write memory files in English. Headers, structure, and example bullets are English regardless of the session's working language.
 
 ## Example Output
 
 ### HANDOFF.md
 
 ```markdown
-# Sessão 2026-04-17 — viabox
+# Session 2026-04-17 — viabox
 
 ## Handoff
 - Validated e2e tests for MVP upload features. 15/15 passed.
 
-## Próximos passos
+## Next steps
 - Deploy to staging.
 - Schedule security review with external auditor.
 
@@ -148,12 +148,12 @@ Ask explicitly: "Approve to write?"
 ```markdown
 # Learnings — viabox
 
-## Segurança
+## Security
 - File size bypass in upload pentest. Fixed via max upload sizing. Why: attacker could bypass the MIME check by spoofing the extension on a file that exceeded content-type checks only after the decompression stage.
 
 ## Infra
 - Hetzner CX33 peaks at 85% CPU during Docker rebuilds. Why: instance sized for steady-state, not burst.
 
-## Negócio
+## Business
 - Landing page conversion +40% when phone field is optional. Why: real estate leads resist giving phone upfront.
 ```

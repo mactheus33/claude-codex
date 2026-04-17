@@ -52,12 +52,12 @@ The skill will:
 **`memory/HANDOFF.md`**
 
 ```markdown
-# Sessão 2026-04-17 — viabox
+# Session 2026-04-17 — viabox
 
 ## Handoff
 - Validated e2e tests for MVP upload features. 15/15 passed.
 
-## Próximos passos
+## Next steps
 - Deploy to staging.
 - Schedule security review.
 
@@ -70,7 +70,7 @@ The skill will:
 ```markdown
 # Learnings — viabox
 
-## Segurança
+## Security
 - File size bypass in upload pentest. Fixed via max upload sizing.
 
 ## Infra
