@@ -22,13 +22,14 @@ It does NOT touch Claude Code's global auto-memory.
 
 ## Install
 
-Clone into a Claude Code plugins directory, or install as a marketplace plugin once published:
+From within Claude Code, add the marketplace and install the plugin:
 
-```bash
-git clone https://github.com/mactheus33/claude-codex ~/.claude/plugins/claude-codex
+```
+/plugin marketplace add mactheus33/claude-codex
+/plugin install claude-codex
 ```
 
-Restart any active Claude Code session to pick up the skill.
+Restart the current session to pick up the skill.
 
 ## Usage
 
