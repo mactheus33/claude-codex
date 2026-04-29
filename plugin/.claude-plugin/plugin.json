@@ -1,7 +1,7 @@
 {
   "name": "claude-codex",
-  "description": "Memória de sessão rolling-digest para Claude Code. Mantém handoff.md e aprendizados.md pequenos, atualiza documento_mestre.md cirurgicamente, e promove regras permanentes do digest para o mestre via skill /codex.",
-  "version": "0.3.0",
+  "description": "Memória de projeto para Claude Code. Skill /codex faz rolling digest a cada sessão (handoff + aprendizados + edita documento_mestre cirurgicamente). Skill /otimizar-projeto faz higiene macro: split do mestre quando cresce, promoção de regras, compactação por idade, arquivamento.",
+  "version": "0.4.0",
   "author": {
     "name": "Matheus Furtado Drummond"
   }
