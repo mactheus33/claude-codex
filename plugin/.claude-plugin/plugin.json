@@ -1,7 +1,7 @@
 {
   "name": "claude-codex",
-  "description": "Rolling-digest session memory for Claude Code. Keeps project HANDOFF.md and learnings.md small, current, and load-bearing via the /codex skill.",
-  "version": "0.1.0",
+  "description": "Memória de sessão rolling-digest para Claude Code. Mantém handoff.md e aprendizados.md do projeto pequenos, atuais e carregando peso via skill /codex.",
+  "version": "0.2.0",
   "author": {
     "name": "Matheus Furtado Drummond"
   }
