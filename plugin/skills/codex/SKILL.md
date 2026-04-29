@@ -1,159 +1,233 @@
 ---
 name: codex
-description: This skill should be used when the user invokes "/codex", or asks to "end the session", "close out", "save handoff", "update project memory", "compact memory", "write session summary", or any phrase indicating the working session should be wrapped up. Reads current conversation, rolls the active project's HANDOFF.md and learnings.md into concise rolling digests, and writes them only after user approval.
-version: 0.1.0
+description: Use esta skill quando o usuário invocar "/codex", ou pedir para "encerrar a sessão", "fechar", "salvar handoff", "atualizar memória do projeto", "compactar memória", "escrever resumo de sessão", ou qualquer frase indicando que a sessão de trabalho deve ser encerrada. Lê a conversa atual, compacta o handoff.md e aprendizados.md do projeto ativo em digests rolantes concisos, propõe promoção de regras permanentes para o documento_mestre.md, e escreve apenas após aprovação do usuário.
+version: 0.3.0
 ---
 
 # Codex — Rolling Digest
 
-Wrap a Claude Code working session by compacting project memory into a small, current, load-bearing digest. Prevent `memory/` files from growing unbounded while preserving lessons that still matter.
+Encerra uma sessão de trabalho do Claude Code compactando a memória do projeto em um digest pequeno, atual e carregando peso. Previne os arquivos de `memory/` de crescerem sem limite, preservando lições que ainda importam, e mantém o `documento_mestre.md` (documento vivo do projeto) atualizado com regras permanentes.
 
-## Philosophy
+## Filosofia
 
-Append-forever memory grows into noise. This skill enforces a **rolling digest**: each session end, memory is re-read, merged with today's work, and rewritten concise. Three principles:
+Memória que só cresce vira ruído. Esta skill aplica **rolling digest**: a cada fim de sessão, a memória é relida, mesclada com o trabalho de hoje e reescrita concisa. Quatro princípios:
 
-1. **Small** — bounded size, fits in context without burning tokens.
-2. **Current** — reflects latest state, not history. History lives in git.
-3. **Load-bearing** — every line earns its place by preventing a future mistake or clarifying current state.
+1. **Pequeno** — tamanho limitado, cabe no contexto sem queimar tokens.
+2. **Atual** — reflete estado mais recente, não histórico. Histórico vive no git.
+3. **Carrega peso** — toda linha justifica o lugar evitando um erro futuro ou esclarecendo estado atual.
+4. **Promove para o mestre** — regras que viraram permanentes sobem para `documento_mestre.md` e saem do `aprendizados.md` (anti-duplicação).
 
-## Files Managed
+## Arquivos gerenciados
 
-Relative to the active project root:
+Relativos à raiz do projeto ativo:
 
-- **`memory/HANDOFF.md`** — current state. Always overwritten.
-- **`memory/learnings.md`** — curated lessons. Always overwritten, after merging old + new.
+- **`memory/documento_mestre.md`** — documento vivo do projeto (escopo, status, pendências, regras permanentes, decisões-chave). Lido no início; atualizado de forma cirúrgica (status + pendências + promoção de regras). Limite <300 linhas (🟢) / 300-500 (🟡) / >500 (🔴 split).
+- **`memory/handoff.md`** — estado da sessão. Sempre sobrescrito.
+- **`memory/aprendizados.md`** — lições curadas. Sempre sobrescrito, depois de mesclar antigas + novas. Cap ~150 linhas.
+- **`memory/index.md`** — catálogo da árvore. Atualizado se houver criação/arquivamento de satélite na sessão (raro no /codex; mais comum no `/otimizar-projeto`).
 
-Global auto-memory (`~/.claude/projects/.../MEMORY.md`) is NOT touched by this skill — it has its own discipline.
+A auto-memória global (`~/.claude/projects/.../MEMORY.md`) NÃO é tocada por esta skill — ela tem disciplina própria.
 
 ## Workflow
 
-Follow these steps in order when the skill triggers.
+Seguir os passos na ordem quando a skill for acionada.
 
-### Step 1: Confirm project scope
+### Passo 1: Confirmar escopo do projeto
 
-Identify the active project from the current working directory and conversation context. If ambiguous, or if the directory has no `memory/` folder and creating one is not obviously correct, ask the user to confirm the project and path before proceeding. Do not assume.
+Identificar o projeto ativo a partir do diretório de trabalho atual e do contexto da conversa. Se ambíguo, ou se o diretório não tem pasta `memory/` e criar uma não é obviamente correto, pedir para o usuário confirmar projeto e caminho antes de prosseguir. Não assumir.
 
-### Step 2: Read current session context
+### Passo 2: Ler contexto da sessão atual
 
-Scan the conversation for:
-- What was accomplished (final states, passing tests, deployed changes).
-- Non-obvious lessons learned — technical, business, or process.
-- Structural evolutions (stack changes, architecture decisions, new integrations).
-- What is in progress, what is next, what is blocked.
+Escanear a conversa em busca de:
+- O que foi entregue (estados finais, testes passando, mudanças deployadas).
+- Lições não-óbvias aprendidas — técnicas, de negócio, de processo.
+- **Regras permanentes** descobertas ou ratificadas (decisões estruturais, convenções "sempre/nunca").
+- Evoluções estruturais (mudanças de stack, decisões de arquitetura, novas integrações).
+- O que está em progresso, o que vem a seguir, o que está bloqueado.
+- **Pendências resolvidas** (do `documento_mestre.md` que foram fechadas) e **pendências novas**.
 
-### Step 3: Load existing memory
+### Passo 3: Carregar memória existente
 
-Read (if present):
-- `<project-root>/memory/HANDOFF.md`
-- `<project-root>/memory/learnings.md`
+Ler (se existir):
+- `<raiz-do-projeto>/memory/documento_mestre.md`
+- `<raiz-do-projeto>/memory/handoff.md`
+- `<raiz-do-projeto>/memory/aprendizados.md`
+- `<raiz-do-projeto>/memory/index.md`
 
-If either does not exist, treat as empty and plan to create.
+Se algum deles não existir, tratar como vazio. Se `documento_mestre.md` não existir, propor criar usando o template em `~/.claude/shared/memory-template/documento_mestre.md` antes de prosseguir.
 
-### Step 4: Compose new HANDOFF.md
+### Passo 4: Compor novo handoff.md
 
-HANDOFF.md is always overwritten. Use this exact structure:
+`handoff.md` sempre é sobrescrito. Usar exatamente esta estrutura:
 
 ```markdown
-# Session YYYY-MM-DD — <project-name>
+# Sessão YYYY-MM-DD — <nome-do-projeto>
 
 ## Handoff
-- <1 line: what was done, final state>
+- <1 linha: o que foi feito, estado final>
 
-## Next steps
-- <bullets, actionable, prioritized>
+## Próximos passos
+- <bullets, acionáveis, priorizados>
 
-## Blockers
-- <only if blockers exist — omit the section entirely otherwise>
+## Bloqueios
+- <somente se houver bloqueios — omitir a seção inteira caso contrário>
 ```
 
-Rules:
-- One date per file. Previous HANDOFF content is replaced, not appended.
-- No filler. If "Next steps" is empty, state "None." Do not invent items.
-- Direct, declarative language. No hedging.
+Regras:
+- Uma data por arquivo. Conteúdo anterior do handoff é substituído, não anexado.
+- Sem enchimento. Se "Próximos passos" estiver vazio, escrever "Nenhum.". Não inventar itens.
+- Linguagem direta, declarativa. Sem hedge.
+- Cap ~50 linhas. Se a sessão foi muito densa, condensar para o essencial.
 
-### Step 5: Compose new learnings.md (digest)
+### Passo 5: Compor novo aprendizados.md (digest)
 
-learnings.md is also overwritten, but only after merging old + new.
+`aprendizados.md` também é sobrescrito, mas apenas depois de mesclar antigos + novos.
 
-**Keep from existing learnings:**
-- Non-obvious AND still actionable.
-- Lessons that, if forgotten, would cause a repeat mistake.
+**Manter dos aprendizados existentes:**
+- Não-óbvios E ainda acionáveis.
+- Lições que, se esquecidas, causariam repetição de erro.
 
-**Drop from existing learnings:**
-- One-off bug fixes already reflected in code.
-- Lessons that became code convention (they live in the code now).
-- Anything generic already covered by global identity files (e.g. `~/.claude/soul.md`, CLAUDE.md).
-- Duplicate items — merge into one.
+**Descartar dos aprendizados existentes:**
+- Bug fixes pontuais já refletidos no código.
+- Lições que viraram convenção do código (vivem no código agora).
+- Qualquer coisa genérica já coberta em arquivos de identidade global (ex: `~/.claude/soul.md`, CLAUDE.md).
+- Itens duplicados — mesclar em um.
+- **Itens já promovidos para `documento_mestre.md`** (na seção "Regras permanentes").
 
-**Add from today's session:**
-- New non-obvious learnings.
+**Adicionar do que veio da sessão de hoje:**
+- Aprendizados não-óbvios novos.
 
-**Cap:** ~150 lines total. If exceeded, compress further by merging similar items.
+**Cap:** ~150 linhas no total. Se exceder, comprimir mais mesclando itens similares.
 
-Format:
+Formato:
 
 ```markdown
-# Learnings — <project-name>
+# Aprendizados — <nome-do-projeto>
 
-## <Category>
-- <direct, 1-line lesson>. Why: <optional but useful for non-obvious items>.
+## <Categoria>
+- <lição direta de 1 linha>. Por quê: <opcional, mas útil para itens não-óbvios>.
 ```
 
-Categories emerge organically from content (e.g. Security, Infra, Business, Performance). Do not create empty categories.
+Categorias emergem organicamente do conteúdo (ex: Segurança, Infra, Negócio, Performance). Não criar categorias vazias.
 
-### Step 6: Show drafts, request approval
+### Passo 5.5: Identificar promoções para o documento_mestre
 
-Before writing, display to the user:
+Examinar a lista final de `aprendizados.md` (mesclada) e identificar entradas que **viraram regra permanente** — itens que:
+- O usuário cita repetidamente em sessões diferentes
+- Definem comportamento "sempre/nunca" para o projeto
+- São referência de decisão estrutural (não gotcha pontual)
+- O agente deveria ler **antes** de tocar em código relacionado
 
-1. The proposed new `HANDOFF.md` (full content).
-2. The proposed new `learnings.md` (full content).
-3. A diff summary: "Kept N items from existing learnings, dropped M, added K new."
+Para cada candidato a promoção, preparar:
+1. **Para qual seção do mestre vai** — "Regras permanentes" (com sub-seção como "Operacional", "Segurança", "Frontend", "Compliance" etc.) OU "Decisões-chave" se for decisão estrutural.
+2. **Versão condensada da regra** — 1-2 linhas, formato "regra direta. Por quê: razão" (idêntico ao formato do mestre).
+3. **Confirmar que será removida do `aprendizados.md`** após promoção (anti-duplicação).
 
-Ask explicitly: "Approve to write?"
+### Passo 5.7: Atualizar documento_mestre.md (cirúrgico)
 
-### Step 7: Write only on approval
+Não sobrescrever o mestre. Aplicar mudanças cirúrgicas:
+- **Header:** atualizar "Última atualização" para a data de hoje.
+- **Status atual:** atualizar com 1-3 frases sobre o estado pós-sessão.
+- **Pendências abertas:** marcar com `~~[x]~~ → ver changelog` as que foram resolvidas; adicionar novas com `[ ]`.
+- **Próximos passos:** atualizar conforme handoff.md.
+- **Regras permanentes:** adicionar as promoções identificadas no Passo 5.5.
+- **Decisões-chave:** adicionar decisões estruturais novas da sessão.
+- **Roadmap:** marcar items concluídos, adicionar novos se aplicável.
+- **Árvore de arquivos:** se algum satélite foi criado/arquivado, atualizar (raro nesta skill — `/otimizar-projeto` é a skill primária pra isso).
 
-- On approval: write both files using the Write tool (overwrite).
-- On redirection: revise based on user feedback, show again. Do not write until explicit approval.
-- On rejection: stop. Do not partially write.
+**Health check:** após as edições, verificar tamanho do mestre.
 
-## Rules
+| Linhas | Ação |
+|---|---|
+| <300 | 🟢 Tudo certo |
+| 300-500 | 🟡 Sugerir rodar `/otimizar-projeto` na próxima sessão |
+| >500 | 🔴 **Sugerir rodar `/otimizar-projeto` agora** após o /codex completar — split de seções com 50+ linhas para satélites `<PROJ>_<AREA>_<TEMA>.md` |
 
-- **One project per invocation.** Never write to multiple projects' memory in one run.
-- **Never append.** Always read → merge → overwrite.
-- **No fabrication.** If the session did not produce a learning, leave the learnings file untouched. Empty is better than invented.
-- **Cross-project learnings** go to the destination project's `memory/incoming-learnings.md`, never direct edit.
-- **Language:** always write memory files in English. Headers, structure, and example bullets are English regardless of the session's working language.
+### Passo 6: Mostrar drafts, pedir aprovação
 
-## Example Output
+Antes de gravar, exibir ao usuário:
 
-### HANDOFF.md
+1. O `handoff.md` proposto (conteúdo completo).
+2. O `aprendizados.md` proposto (conteúdo completo).
+3. As mudanças cirúrgicas no `documento_mestre.md` (formato diff: linhas adicionadas/removidas/modificadas, com seção).
+4. Resumo do diff: "Mantidos N itens dos aprendizados existentes, descartados M, adicionados K novos. **L promoções para documento_mestre.md.** Mestre agora com X linhas (🟢/🟡/🔴)."
+
+Perguntar explicitamente: "Aprova para gravar?"
+
+### Passo 7: Gravar apenas após aprovação
+
+- Aprovação: gravar os 3 arquivos com a tool Write/Edit (handoff e aprendizados sobrescritos; mestre editado de forma cirúrgica).
+- Redirecionamento: revisar com base no feedback do usuário, mostrar de novo. Não gravar até aprovação explícita.
+- Rejeição: parar. Não gravar parcialmente.
+
+Se o mestre passou para 🔴 (>500 linhas), terminar com a recomendação:
+> "documento_mestre.md está em [N] linhas (🔴). Recomendo rodar `/otimizar-projeto` agora para split em satélites antes de continuar."
+
+## Regras
+
+- **Um projeto por invocação.** Nunca gravar em memória de múltiplos projetos numa execução.
+- **Nunca anexar** ao handoff ou aprendizados. Sempre ler → mesclar → sobrescrever.
+- **Documento mestre é editado, não sobrescrito.** Mudanças cirúrgicas preservam o que já está consolidado.
+- **Sem fabricação.** Se a sessão não produziu aprendizado, deixar o aprendizados.md intacto. Vazio é melhor que inventado. Mesma regra para promoções: só promover regras realmente ratificadas.
+- **Anti-duplicação.** Toda regra promovida para o mestre é REMOVIDA do aprendizados.md no mesmo turno.
+- **Aprendizados cross-project** vão para `memory/incoming-learnings.md` do projeto destino, nunca direto edit.
+- **Idioma:** escrever os arquivos de memória em PT-BR. Headers, estrutura e exemplos em PT-BR independente da língua de trabalho da sessão (a comunicação técnica com Claude Code/SDK/MCP segue em EN naturalmente).
+
+## Exemplo de saída
+
+### handoff.md
 
 ```markdown
-# Session 2026-04-17 — viabox
+# Sessão 2026-04-17 — viabox
 
 ## Handoff
-- Validated e2e tests for MVP upload features. 15/15 passed.
+- Validação dos testes e2e para features de upload do MVP. 15/15 passaram.
 
-## Next steps
-- Deploy to staging.
-- Schedule security review with external auditor.
+## Próximos passos
+- Deploy em staging.
+- Agendar revisão de segurança com auditor externo.
 
-## Blockers
-- Waiting on API key for third-party auth provider.
+## Bloqueios
+- Aguardando API key do provedor de auth third-party.
 ```
 
-### learnings.md
+### aprendizados.md
 
 ```markdown
-# Learnings — viabox
+# Aprendizados — viabox
 
-## Security
-- File size bypass in upload pentest. Fixed via max upload sizing. Why: attacker could bypass the MIME check by spoofing the extension on a file that exceeded content-type checks only after the decompression stage.
+## Segurança
+- Bypass de file size no pentest de upload. Fixed via max upload sizing. Por quê: atacante conseguia burlar o check de MIME spoofando a extensão num arquivo que excedia checks de content-type só depois do estágio de descompressão.
 
 ## Infra
-- Hetzner CX33 peaks at 85% CPU during Docker rebuilds. Why: instance sized for steady-state, not burst.
+- Hetzner CX33 chega a 85% CPU em rebuilds Docker. Por quê: instância sizeada para steady-state, não burst.
 
-## Business
-- Landing page conversion +40% when phone field is optional. Why: real estate leads resist giving phone upfront.
+## Negócio
+- Conversão da landing page +40% quando o campo telefone vira opcional. Por quê: leads de real estate resistem a dar telefone de cara.
+```
+
+### Edição cirúrgica do documento_mestre.md (exemplo de diff proposto)
+
+```diff
+ # viabox — Documento Mestre
+
+-> Última atualização: 14/04/2026
++> Última atualização: 17/04/2026
+ > Status: MVP em produção
+
+ ## Status atual
+-MVP rodando, próximo marco é deploy em staging.
++MVP rodando, e2e tests 15/15 passando. Próximo marco: deploy em staging
++pós-revisão de segurança externa.
+
+ ## Pendências abertas
+-- [ ] Validar e2e tests
+-- [ ] Agendar revisão de segurança
++- ~~[x] Validar e2e tests~~ → 15/15 passaram, ver handoff 17/04
++- [ ] Agendar revisão de segurança com auditor externo
+
+ ## Regras permanentes
++
++### Segurança
++- Validar tamanho de upload em servidor, não confiar em content-type. Por quê: bypass via spoofing de extensão em arquivo grande.
 ```
