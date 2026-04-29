@@ -1,60 +1,67 @@
 ---
 name: otimizar-projeto
-description: Use esta skill quando o usuário invocar "/otimizar-projeto", ou pedir para "otimizar memória do projeto", "limpar memory", "compactar documento_mestre", "split do mestre", "organizar memory", "higienizar memória do projeto". Escaneia memory/, propõe plano de organização (split, compactação, promoção, arquivamento) e executa apenas com aprovação do usuário.
-version: 0.1.0
+description: Use esta skill quando o usuário invocar "/otimizar-projeto", ou pedir para "otimizar memória do projeto", "split do mestre", "compactar aprendizados", "limpar memory antigo", "higiene do projeto". Operações pesadas de manutenção da memória do projeto: split do documento_mestre quando >300 linhas, compactação do aprendizados quando >150 linhas, scan e arquivamento de arquivos antigos no memory/. Plano antes de execução. NUNCA toca em changelog.md.
+version: 0.5.0
 ---
 
-# Otimizar Projeto — Higiene da memória técnica do projeto
+# Otimizar Projeto — Higiene Macro da Memória
 
-Faz higiene da pasta `memory/` de um projeto técnico do claude-identity. Adapta o conceito de `otimizar-os` (MatheusOS) para projeto com git: escaneia documento_mestre + satélites + arquivos de sessão, identifica o que está crescendo demais ou ficou obsoleto, e propõe um plano de reorganização. Executa só com aprovação.
+Faz manutenção pesada de médio/longo prazo na memória do projeto. Complementa o `/codex` (que faz faxina por sessão). Esta skill é invocada **sob demanda** quando arquivos crescem além dos limites e precisam de operação estrutural (split, compactação, arquivamento).
 
 ## Filosofia
 
-`/codex` mantém o digest curto a cada sessão (handoff + aprendizados). Esta skill faz a manutenção de **médio prazo**: split do mestre quando ele cresce, arquivamento de conteúdo obsoleto por idade, promoção de regras que estavam dispersas, e atualização do `index.md`.
+`/codex` mantém digest curto a cada sessão. Esta skill faz manutenção de **médio prazo**: split do mestre quando ele cresce (criando `<tema>_mestre.md` na raiz), compactação do `aprendizados.md` quando passa de 150 linhas, arquivamento de conteúdo antigo no `memory/`, e atualização da estrutura quando a árvore do projeto evolui.
 
 Quatro princípios:
 
-1. **Plano antes de execução.** Sempre apresentar o que será feito numerado e categorizado, com aprovação por item ou em bloco.
-2. **Nunca apagar.** Conteúdo obsoleto vai para `memory/arquivo/`, não pro lixo. Git preserva histórico.
+1. **Plano antes de execução.** Sempre apresentar lista numerada por categoria, com aprovação por item ou em bloco.
+2. **Nunca apaga.** Conteúdo obsoleto vai para `memory/arquivo/` (retenção 90d) — git preserva histórico se for revertido.
 3. **Limites numéricos como gatilho.** Não otimizar por intuição — usar os semáforos da convenção.
-4. **Anti-fragmentação.** Máximo 3 satélites novos por execução. Split agressivo gera ruído de navegação.
+4. **Anti-fragmentação.** Máximo 3 satélites novos por execução.
 
-## Arquivos gerenciados
+## Estrutura de duas camadas
 
-Relativos à raiz do projeto ativo:
-
-- **`memory/documento_mestre.md`** — split em satélites quando passa de 300 linhas
-- **`memory/<PROJ>_<AREA>_<TEMA>.md`** — satélites do mestre (criados aqui ou herdados)
-- **`memory/aprendizados.md`** — promoção de regras permanentes para o mestre, compactação por idade
-- **`memory/handoff.md`** — apenas leitura (mantido pelo `/codex`)
-- **`memory/index.md`** — atualizado a cada criação/arquivamento de satélite
-- **`memory/arquivo/`** — destino do conteúdo obsoleto (criado sob demanda)
-
-A skill **não** toca em arquivos de identidade (`~/.claude/`) nem em CLAUDE.md do projeto.
+```
+<projeto>/
+├── CLAUDE.md
+├── documento_mestre.md      # OPERA: split em <tema>_mestre.md quando >300 linhas
+├── aprendizados.md          # OPERA: compactação quando >150 linhas
+├── changelog.md             # NUNCA TOCA — imutável total
+├── <tema>_mestre.md         # OPERA: sub-split se >500 linhas
+└── memory/
+    ├── handoff.md           # NÃO TOCA (responsabilidade do /codex)
+    ├── arquivo/             # destino do conteúdo arquivado
+    └── *.md                 # OPERA: scan por idade, arquivamento
+```
 
 ## Workflow
 
-### Passo 0 — Confirmar projeto
+### Passo 1 — Confirmar projeto
 
-Identificar o projeto ativo a partir do diretório de trabalho. Se ambíguo, pedir confirmação. Se `<projeto>/memory/` não existir, parar e sugerir bootstrap via template em `~/.claude/shared/memory-template/`.
+Identificar o projeto ativo a partir do diretório de trabalho. Se ambíguo, pedir confirmação. Se `<projeto>/documento_mestre.md` não existir, parar e sugerir bootstrap via templates em `~/.claude/shared/memory-template/`.
 
-### Passo 1 — Scan e relatório de saúde
+### Passo 2 — Scan e relatório de saúde
 
-Escanear todos os arquivos `.md` em `<projeto>/memory/` (incluindo `arquivo/` se existir). Para cada arquivo coletar: nome, número de linhas, tamanho em KB, data da última modificação.
+Escanear todos os arquivos `.md` em `<projeto>/` (raiz) e `<projeto>/memory/`. Para cada arquivo coletar: nome, número de linhas, tamanho em KB, data da última modificação.
 
 Apresentar tabela com semáforos:
 
 ```
-Relatório de saúde — <projeto>/memory/
+Relatório de saúde — <projeto>
 Data: DD/MM/AAAA
 
-| Arquivo | Linhas | Tamanho | Última mod | Status |
-|---------|--------|---------|------------|--------|
+RAIZ
+| Arquivo | Linhas | Tamanho | Modificado | Status |
+|---|---|---|---|---|
 | documento_mestre.md | 487 | 28KB | hoje | 🔴 grande |
-| aprendizados.md | 220 | 14KB | hoje | 🟡 atenção |
+| aprendizados.md | 178 | 12KB | hoje | 🟡 atenção |
+| changelog.md | 2400 | 145KB | hoje | — (sem cap) |
+| stripe_mestre.md | 240 | 15KB | DD/MM | 🟢 ok |
+
+MEMORY/
+| Arquivo | Linhas | Tamanho | Modificado | Status |
+|---|---|---|---|---|
 | handoff.md | 45 | 4KB | hoje | 🟢 ok |
-| index.md | 62 | 5KB | DD/MM | 🟡 atenção |
-| FULLCRED_TECH_API.md | 180 | 12KB | DD/MM | 🟢 ok |
 | feedback_old_thing.md | 32 | 1KB | há 100 dias | 🔴 antigo |
 ```
 
@@ -63,79 +70,75 @@ Data: DD/MM/AAAA
 | Arquivo | 🟢 OK | 🟡 Atenção | 🔴 Ação |
 |---|---|---|---|
 | `documento_mestre.md` | <300 linhas | 300-500 | >500 → split obrigatório |
-| Satélite `<PROJ>_<AREA>_<TEMA>.md` | <25KB | 25-40KB | >40KB → sub-split |
+| `<tema>_mestre.md` | <25KB / 500 linhas | 25-40KB | >40KB → sub-split |
 | `aprendizados.md` | <150 linhas | 150-200 | >200 → compactar |
-| `handoff.md` | <50 linhas | 50-80 | >80 |
-| `index.md` | <50 linhas | 50-100 | >100 (árvore fragmentada demais) |
-| Outros `.md` | <20KB | 20-35KB | >35KB |
-| Idade sem modificação | <60 dias | 60-90 dias | >90 dias |
+| `handoff.md` | — | — | (responsabilidade do /codex, ignorar) |
+| `changelog.md` | — | — | **NUNCA TOCA — sem cap** |
+| Arquivos em `memory/` | <60 dias sem mod | 60-90 dias | >90 dias |
 
-### Passo 2 — Análise profunda
+### Passo 3 — Análise profunda
 
-Para cada arquivo 🔴 ou 🟡, analisar conteúdo e classificar cada bloco em 4 tipos:
+Para cada arquivo 🔴 ou 🟡, analisar conteúdo e propor ação.
 
-| Tipo | Critério | Ação |
-|---|---|---|
-| **Permanente** | Regras de negócio, padrões "sempre/nunca", configurações ativas. Identificar por palavras-chave: "nunca", "sempre", "regra", "padrão", "obrigatório" | Fica onde está (no mestre ou no satélite atual) |
-| **Promovível** | Regra usada toda sessão, hoje vivendo em `aprendizados.md` ou em satélite mas que deveria estar no mestre | Sobe para `documento_mestre.md` (seção "Regras permanentes") |
-| **Temporário** | Decisões pontuais, bug fixes, status updates datados. Identificar por: data específica + resultado pontual | Compactar conforme idade (ver tabela abaixo) |
-| **Ultrapassado** | Status que não vale mais ("aguardando X" quando X já aconteceu), pesquisa concluída, decisão substituída por outra | Mover para `arquivo/` |
+**Para `documento_mestre.md` >300 linhas:**
+- Identificar seções com 50+ linhas sobre tema único.
+- Cada candidato vira proposta de satélite `<tema>_mestre.md` na **raiz** (não em memory/).
 
-**Critério de idade para conteúdo temporário:**
+**Para `aprendizados.md` >150 linhas:**
+- Identificar entradas duplicadas ou similares para mesclar.
+- Identificar lições antigas (referenciadas no changelog há >90 dias) candidatas a remover.
+- Identificar lições que viraram regra permanente (deveriam ter subido pro mestre via /codex mas escaparam).
 
-| Idade | Ação |
-|---|---|
-| <30 dias | Não mexer — conteúdo ativo |
-| 30-60 dias | Condensar (3 parágrafos viram 3 linhas) |
-| 60-90 dias | Condensar obrigatoriamente + mover detalhes para `arquivo/` |
-| >90 dias | Manter apenas 1 linha resumo + ref ao arquivo |
+**Para arquivos em `memory/` >90 dias:**
+- Avaliar se conteúdo virou regra (deveria ter sido promovido) ou é histórico (vai para `memory/arquivo/`).
+- Se deveria ter virado regra, propor promoção pro mestre + apagamento.
+- Se é histórico não-essencial, propor mover para `memory/arquivo/`.
 
-**Identificar candidatos a split do mestre:**
-- Seções com 50+ linhas sobre um único tema (decisões por área, especificações de módulo, mapeamentos de API, histórico comercial, etc.)
-- Cada candidato vira proposta de satélite `<PROJ>_<AREA>_<TEMA>.md`
+**Para `<tema>_mestre.md` >500 linhas:**
+- Identificar sub-temas para split em sub-satélite (mesma convenção, ex: `stripe_webhooks_mestre.md` saindo de `stripe_mestre.md`).
 
-### Passo 3 — Plano de ação
+### Passo 4 — Plano de ação
 
-Apresentar lista numerada agrupada por tipo, com aprovação do usuário antes de qualquer escrita:
+Apresentar lista numerada agrupada por categoria:
 
 ```
-Plano de organização — <projeto>/memory/
+Plano de organização — <projeto>
 
 SPLIT DO MESTRE (X ações)
-1. [documento_mestre.md] Seção "Decisões de Tech Stack" (62 linhas) → criar FULLCRED_TECH_DECISOES.md
-2. [documento_mestre.md] Seção "Regras de Compliance" (55 linhas) → criar FULLCRED_COMPLIANCE_REGRAS.md
+1. [documento_mestre.md] Seção "Decisões Stripe" (62 linhas) → criar stripe_mestre.md na raiz
+2. [documento_mestre.md] Seção "Compliance Bacen" (55 linhas) → criar compliance_mestre.md na raiz
 
-PROMOVER PARA O MESTRE (X ações)
-3. [aprendizados.md] "CRM internal-only" (regra usada toda sessão) → seção "Regras permanentes > Segurança"
-4. [feedback_old_pattern.md] Promover regra → mestre, manter satélite como referência histórica
+COMPACTAÇÃO DE APRENDIZADOS (X ações)
+3. [aprendizados.md] Mesclar 4 entradas similares na seção Segurança em 1 entrada consolidada
+4. [aprendizados.md] Promover regra "X" da seção Process para o mestre (deveria ter ido via /codex)
 
-CONDENSAR / ARQUIVAR (X ações)
-5. [aprendizados.md] Entradas de Janeiro (60-90d) → condensar 3 → 1 linha + manter
-6. [project_old_decision.md] >90 dias, decisão substituída → mover para arquivo/
+ARQUIVAMENTO DE MEMORY/ (X ações)
+5. [memory/feedback_old_thing.md] >100 dias, conteúdo já refletido em código → memory/arquivo/
+6. [memory/project_dead.md] decisão revertida em sessão posterior → memory/arquivo/
 
-ATUALIZAR INDEX (auto)
-7. [index.md] Refletir 2 satélites novos + 1 arquivamento
+SUB-SPLIT (X ações)
+7. [stripe_mestre.md] Seção "Webhooks" (110 linhas) → criar stripe_webhooks_mestre.md na raiz
 
 MANTER (sem ação) — X arquivos
-- handoff.md: dentro do limite
-- aprendizados.md (após item 3 e 5): dentro do limite
-- demais satélites recentes
+- changelog.md: imutável, fora do escopo
+- handoff.md: responsabilidade do /codex
+- demais arquivos dentro do limite
 ```
 
 Perguntar:
 > "Posso executar o plano completo? Ou prefere aprovar item por item?"
 
-**NUNCA executar sem resposta.**
+**NUNCA executar sem resposta explícita.**
 
-### Passo 4 — Execução
+### Passo 5 — Execução
 
-Aceitar respostas tipo "tudo sim", "só 1, 3 e 5", "não quero arquivar nada". Executar apenas itens aprovados, nesta ordem:
+Aceitar respostas como "tudo sim", "só 1, 3 e 5", "não quero arquivar nada". Executar apenas itens aprovados, nesta ordem:
 
-#### 4a. Split do mestre
+#### 5a. Split do mestre
 
 Para cada split aprovado:
-1. Ler a seção original do mestre
-2. Criar arquivo `<projeto>/memory/<PROJ>_<AREA>_<TEMA>.md` com cabeçalho:
+1. Ler a seção original do `documento_mestre.md`.
+2. Criar arquivo `<projeto>/<tema>_mestre.md` (raiz, **não memory/**) com cabeçalho:
    ```markdown
    > Documento pai: documento_mestre.md
    > Criado em: DD/MM/AAAA | Extraído de: documento_mestre.md
@@ -146,83 +149,67 @@ Para cada split aprovado:
    ```
 3. No `documento_mestre.md`, substituir a seção original por ponteiro de 2-3 linhas:
    ```markdown
-   > **<TEMA>:** <resumo de 1-2 linhas>. Documento completo: `<PROJ>_<AREA>_<TEMA>.md`
+   > **<TEMA>:** <resumo de 1-2 linhas>. Ver `<tema>_mestre.md`.
    ```
-4. Atualizar `index.md` adicionando entrada do novo satélite
 
 **Convenção de nomes:**
-- `<PROJ>` = prefixo do projeto em maiúsculas (FULLCRED, VIABOX, BWPSITE, CODEX)
-- `<AREA>` = TECH / BIZ / INFRA / PRODUTO / DECISOES / INTEGRACAO / COMERCIAL / COMPLIANCE
-- `<TEMA>` = assunto específico
+- Tudo em minúsculas: `<tema>_mestre.md`
+- Exemplos: `stripe_mestre.md`, `auth_mestre.md`, `compliance_mestre.md`, `outlook_mestre.md`
 
-#### 4b. Promoção para o mestre
+#### 5b. Compactação do aprendizados
 
-Para cada promoção aprovada:
-1. Ler a regra na origem (aprendizados.md ou satélite)
-2. Adicionar no `documento_mestre.md` (seção "Regras permanentes" ou "Decisões-chave"), formato condensado: `**<Regra>:** <descrição>. Por quê: <razão>.`
-3. Remover da origem (se vier do `aprendizados.md`)
-4. Se vier de satélite, manter o satélite como referência histórica mas atualizar com nota: `> Promovido para documento_mestre.md em DD/MM`
+Para cada operação aprovada:
+1. **Mesclar entradas similares**: combinar em entrada única mantendo o "por quê" mais informativo.
+2. **Promover para o mestre**: copiar regra para `documento_mestre.md` (seção "Regras permanentes") e remover do `aprendizados.md`.
+3. **Remover lições obsoletas**: registrar no changelog antes de apagar (formato: `## YYYY-MM-DD — Limpeza de aprendizados.md` + lista do que foi removido).
 
-#### 4c. Condensar conteúdo antigo
+#### 5c. Arquivamento de memory/
 
-Para cada bloco aprovado:
-1. Ler a seção original
-2. Reescrever em formato compacto:
-   - Decisões: `**[DATA] Decisão:** <resultado em 1 frase>. Detalhes em arquivo/<arquivo>.md.`
-   - Processos concluídos: `**<TEMA>:** <resultado final>. Ver arquivo/.`
-   - Status desatualizados: remover (já estão em git log)
-3. Verificar que referências cruzadas não quebraram
+Para cada arquivo aprovado:
+1. Criar `<projeto>/memory/arquivo/` se não existir.
+2. Mover arquivo para `<projeto>/memory/arquivo/<nome_original>.md`.
+3. Registrar entrada no changelog: `## YYYY-MM-DD — Arquivamento` + lista do que foi movido + razão.
 
-#### 4d. Arquivar obsoletos
+#### 5d. Sub-split de satélite_mestre
 
-Para cada arquivamento aprovado:
-1. Criar pasta `<projeto>/memory/arquivo/` se não existir
-2. Mover arquivo para `<projeto>/memory/arquivo/<nome_original>.md`
-3. Remover entrada do `index.md`
+Mesma lógica do 5a, mas operando sobre `<tema>_mestre.md` ao invés do mestre principal. Sub-satélite vira `<tema>_<sub_tema>_mestre.md`.
 
-#### 4e. Atualizar index.md
-
-Após todas as operações:
-1. Recalcular total de arquivos
-2. Adicionar entradas dos novos satélites com link e descrição
-3. Remover entradas dos arquivos arquivados
-4. Atualizar data no cabeçalho
-
-#### 4f. Confirmação por alteração
+#### 5e. Confirmação por alteração
 
 Antes de cada Edit/Write em arquivo existente, mostrar antes/depois resumido:
 
 ```
-Antes (memory/documento_mestre.md, linhas 142-204):
+Antes (documento_mestre.md, linhas 142-204):
 [primeiras linhas do bloco]
 
 Depois:
-> **Decisões de Tech Stack:** stack consolidado pós-MVP. Detalhes em FULLCRED_TECH_DECISOES.md
+> **Decisões Stripe:** integração com webhook + reconciliação. Ver `stripe_mestre.md`.
 
 Confirmar? (sim / não / ajustar)
 ```
 
-### Passo 5 — Relatório final
+### Passo 6 — Relatório final
 
 ```
 Otimização concluída ✓
 
 | Arquivo | Antes | Depois | Δ |
-|---------|-------|--------|---|
+|---|---|---|---|
 | documento_mestre.md | 487 linhas | 220 linhas | -55% |
-| aprendizados.md | 220 linhas | 145 linhas | -34% |
+| aprendizados.md | 178 linhas | 142 linhas | -20% |
 
-Novos satélites criados:
-- FULLCRED_TECH_DECISOES.md (62 linhas)
-- FULLCRED_COMPLIANCE_REGRAS.md (55 linhas)
+Novos satélites criados (raiz):
+- stripe_mestre.md (62 linhas)
+- compliance_mestre.md (55 linhas)
+- stripe_webhooks_mestre.md (110 linhas, sub-split)
 
-Promovidos para o mestre: 2 regras
-Arquivados: 1 arquivo (project_old_decision.md → arquivo/)
+Arquivados:
+- memory/arquivo/feedback_old_thing.md (registrado no changelog)
 
 Status pós-otimização:
-- documento_mestre.md: 🟢 ok
-- aprendizados.md: 🟢 ok
-- index.md: atualizado, 41 arquivos
+- documento_mestre.md: 🟢
+- aprendizados.md: 🟢
+- changelog.md: imutável (não tocado)
 
 Próxima higiene recomendada: ~30 dias ou quando algum semáforo voltar pro 🔴.
 ```
@@ -230,27 +217,27 @@ Próxima higiene recomendada: ~30 dias ou quando algum semáforo voltar pro 🔴
 Se restou item 🟡/🔴 não aprovado:
 > "Ainda há X arquivos acima do limite ideal. Posso revisar numa próxima execução."
 
-## Regras
+## Regras invioláveis
 
 - **Nunca executar sem aprovação explícita** — plano primeiro, ação depois.
-- **Nunca apagar conteúdo** — apenas mover (arquivo/, satélite ou git log).
-- **Nunca resumir regras de negócio fundamentais** — independente de idade.
-- **Nunca criar mais de 3 satélites por execução** — evita fragmentação.
-- **Nunca quebrar links bidirecionais** — todo satélite tem header `> Documento pai: documento_mestre.md`, e o mestre tem ponteiro descendente.
+- **NUNCA tocar em `changelog.md`** — imutabilidade total. Se precisa registrar arquivamento/limpeza, é via append normal seguindo regra do /codex.
+- **Nunca apagar conteúdo direto** — sempre move (changelog, satélite ou `memory/arquivo/`).
+- **Nunca criar mais de 3 satélites por execução** — anti-fragmentação.
+- **Nunca quebrar links bidirecionais** — todo `<tema>_mestre.md` tem header `> Documento pai: documento_mestre.md`, e o mestre tem ponteiro descendente.
 - **Sempre ler o arquivo antes de alterar** — nada de editar sem entender o conteúdo.
 - **Sempre mostrar antes/depois** para alterações em arquivos existentes.
-- **Sempre atualizar `index.md`** quando criar/mover satélite — não esperar fim da execução.
-- **Idioma:** PT-BR para todos os arquivos de memória, exceto identifiers técnicos (paths, comandos, código).
+- **Idioma:** PT-BR para todos os arquivos de memória.
 
 ## Integração com outras skills
 
-- **`/codex`** — wrap de fim de sessão. Faz promoção pontual de regra do dia para o mestre. Esta skill (`/otimizar-projeto`) faz higiene macro de médio/longo prazo.
-- **Bootstrap de novo projeto** — `~/.claude/shared/memory-template/` tem os esqueletos. Se memory/ não existe, sugerir bootstrap antes de rodar esta skill.
+- **`/codex`** — wrap de fim de sessão. Faz faxina rápida do memory/ + atualização cirúrgica do mestre + append no changelog. Esta skill faz higiene macro periódica (split, compactação, arquivamento).
+- **Bootstrap de novo projeto** — `~/.claude/shared/memory-template/` tem os esqueletos.
 
 ## Quando invocar
 
 - `/codex` reportou mestre 🟡 ou 🔴 (>300 ou >500 linhas)
+- `aprendizados.md` passou de 150 linhas
+- Arquivos em `memory/` há mais de 90 dias acumulando
 - Mensal como higiene preventiva
 - Antes de uma sessão longa, para limpar o terreno
-- Quando arquivos `aprendizados.md` ou `index.md` ficaram densos
-- Quando o usuário pede explicitamente: "otimizar projeto", "limpar memory", "split do mestre", "organizar memória"
+- Quando o usuário pede explicitamente: "otimizar projeto", "split do mestre", "limpar memory antigo", "compactar aprendizados"
