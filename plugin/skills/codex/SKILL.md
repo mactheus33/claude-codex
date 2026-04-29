@@ -1,64 +1,113 @@
 ---
 name: codex
-description: Use esta skill quando o usuário invocar "/codex", ou pedir para "encerrar a sessão", "fechar", "salvar handoff", "atualizar memória do projeto", "compactar memória", "escrever resumo de sessão", ou qualquer frase indicando que a sessão de trabalho deve ser encerrada. Lê a conversa atual, compacta o handoff.md e aprendizados.md do projeto ativo em digests rolantes concisos, propõe promoção de regras permanentes para o documento_mestre.md, e escreve apenas após aprovação do usuário.
-version: 0.3.0
+description: Use esta skill quando o usuário invocar "/codex", ou pedir para "encerrar a sessão", "fechar", "salvar handoff", "atualizar memória do projeto", "compactar memória", "escrever resumo de sessão", "limpar memory", ou qualquer frase indicando que a sessão deve ser encerrada. Faz faxina completa do memory/ do projeto, sintetiza conteúdo (regras → mestre, lições → aprendizados, notas granulares → changelog), sobrescreve handoff e atualiza documento_mestre cirurgicamente. Escreve apenas após aprovação.
+version: 0.5.0
 ---
 
-# Codex — Rolling Digest
+# Codex — Faxineiro de Sessão + Rolling Digest
 
-Encerra uma sessão de trabalho do Claude Code compactando a memória do projeto em um digest pequeno, atual e carregando peso. Previne os arquivos de `memory/` de crescerem sem limite, preservando lições que ainda importam, e mantém o `documento_mestre.md` (documento vivo do projeto) atualizado com regras permanentes.
+Encerra uma sessão de trabalho fazendo **faxina completa** do `memory/` do projeto. Não acumula lixo: tudo que foi criado durante a sessão é triado, promovido para o lugar certo na camada permanente (raiz do projeto) ou descartado. O `changelog.md` é o backup final — nada se perde.
 
 ## Filosofia
 
-Memória que só cresce vira ruído. Esta skill aplica **rolling digest**: a cada fim de sessão, a memória é relida, mesclada com o trabalho de hoje e reescrita concisa. Quatro princípios:
+Memória que só cresce vira ruído. Esta skill aplica **faxina por sessão**:
 
-1. **Pequeno** — tamanho limitado, cabe no contexto sem queimar tokens.
-2. **Atual** — reflete estado mais recente, não histórico. Histórico vive no git.
-3. **Carrega peso** — toda linha justifica o lugar evitando um erro futuro ou esclarecendo estado atual.
-4. **Promove para o mestre** — regras que viraram permanentes sobem para `documento_mestre.md` e saem do `aprendizados.md` (anti-duplicação).
+1. **Pequeno e curado** — `documento_mestre.md`, `aprendizados.md`, `handoff.md` ficam pequenos e atualizados.
+2. **Histórico preservado** — `changelog.md` é append-only, nunca apaga, capta tudo que sai dos outros arquivos.
+3. **memory/ vira espaço de rascunho** — agente cria livre durante a sessão; /codex faxina no fim.
+4. **Promoção para a camada certa** — regras vão pro mestre, lições pro aprendizados, notas granulares pro changelog, fonte de verdade de tema grande pra `<tema>_mestre.md` na raiz.
 
-## Arquivos gerenciados
+## Estrutura de duas camadas
 
-Relativos à raiz do projeto ativo:
-
-- **`memory/documento_mestre.md`** — documento vivo do projeto (escopo, status, pendências, regras permanentes, decisões-chave). Lido no início; atualizado de forma cirúrgica (status + pendências + promoção de regras). Limite <300 linhas (🟢) / 300-500 (🟡) / >500 (🔴 split).
-- **`memory/handoff.md`** — estado da sessão. Sempre sobrescrito.
-- **`memory/aprendizados.md`** — lições curadas. Sempre sobrescrito, depois de mesclar antigas + novas. Cap ~150 linhas.
-- **`memory/index.md`** — catálogo da árvore. Atualizado se houver criação/arquivamento de satélite na sessão (raro no /codex; mais comum no `/otimizar-projeto`).
-
-A auto-memória global (`~/.claude/projects/.../MEMORY.md`) NÃO é tocada por esta skill — ela tem disciplina própria.
+```
+<projeto>/
+├── CLAUDE.md                # 0. institucional + arquitetura
+├── documento_mestre.md      # 1. PERMANENTE: status + pendências + regras (BOOTSTRAP)
+├── aprendizados.md          # 2. PERMANENTE: lições curadas (BOOTSTRAP)
+├── changelog.md             # 3. PERMANENTE: histórico append-only (NÃO bootstrap)
+├── <tema>_mestre.md         # PERMANENTE: satélites do mestre (lidos sob demanda)
+└── memory/
+    ├── handoff.md           # TRANSIENTE: estado última sessão (BOOTSTRAP)
+    └── *.md                 # TRANSIENTE: rascunhos da sessão (alvo da faxina)
+```
 
 ## Workflow
 
-Seguir os passos na ordem quando a skill for acionada.
+### Passo 1 — Confirmar projeto
 
-### Passo 1: Confirmar escopo do projeto
+Identificar o projeto ativo a partir do diretório de trabalho. Se ambíguo, pedir confirmação. Se `<projeto>/documento_mestre.md` não existir, parar e sugerir bootstrap via templates em `~/.claude/shared/memory-template/raiz/`.
 
-Identificar o projeto ativo a partir do diretório de trabalho atual e do contexto da conversa. Se ambíguo, ou se o diretório não tem pasta `memory/` e criar uma não é obviamente correto, pedir para o usuário confirmar projeto e caminho antes de prosseguir. Não assumir.
+### Passo 2 — Ler camada permanente
 
-### Passo 2: Ler contexto da sessão atual
+Ler em ordem (todos da raiz do projeto):
+- `<projeto>/documento_mestre.md`
+- `<projeto>/aprendizados.md`
+- `<projeto>/memory/handoff.md`
+
+`<projeto>/changelog.md` **não** é lido automaticamente — só se a sessão pediu busca histórica.
+`<projeto>/<tema>_mestre.md` **não** são lidos automaticamente — só os relevantes ao trabalho da sessão.
+
+### Passo 3 — Escanear memory/
+
+Listar todos os arquivos em `<projeto>/memory/` (exceto `handoff.md`). Para cada um, identificar:
+- **Origem temporal:** criado/modificado nesta sessão? Em sessão anterior?
+- **Tipo de conteúdo:** rascunho, decisão, gotcha técnico, status update, registro de ação
+- **Relevância atual:** ainda válido? Já obsoleto?
+
+### Passo 4 — Ler conversa da sessão
 
 Escanear a conversa em busca de:
 - O que foi entregue (estados finais, testes passando, mudanças deployadas).
-- Lições não-óbvias aprendidas — técnicas, de negócio, de processo.
-- **Regras permanentes** descobertas ou ratificadas (decisões estruturais, convenções "sempre/nunca").
-- Evoluções estruturais (mudanças de stack, decisões de arquitetura, novas integrações).
-- O que está em progresso, o que vem a seguir, o que está bloqueado.
-- **Pendências resolvidas** (do `documento_mestre.md` que foram fechadas) e **pendências novas**.
+- Decisões tomadas (pequenas e grandes).
+- Lições não-óbvias aprendidas.
+- Regras permanentes descobertas ou ratificadas.
+- Pendências resolvidas (do mestre) e novas.
+- Notas granulares do tipo "tentamos X, voltamos pra Y porque Z".
 
-### Passo 3: Carregar memória existente
+### Passo 5 — Triagem do memory/
 
-Ler (se existir):
-- `<raiz-do-projeto>/memory/documento_mestre.md`
-- `<raiz-do-projeto>/memory/handoff.md`
-- `<raiz-do-projeto>/memory/aprendizados.md`
-- `<raiz-do-projeto>/memory/index.md`
+Para cada arquivo em memory/ (exceto handoff.md), classificar e propor destino:
 
-Se algum deles não existir, tratar como vazio. Se `documento_mestre.md` não existir, propor criar usando o template em `~/.claude/shared/memory-template/documento_mestre.md` antes de prosseguir.
+| Conteúdo | Destino | Operação |
+|---|---|---|
+| Regra permanente "sempre/nunca" | `documento_mestre.md` (seção "Regras permanentes") | Promover + apagar satélite |
+| Lição genérica reutilizável | `aprendizados.md` (categoria correspondente) | Consolidar + apagar satélite |
+| Fonte de verdade de tema grande (50+ linhas, persistente) | Promover para `<tema>_mestre.md` na **raiz** do projeto, com header `> Documento pai: documento_mestre.md` + ponteiro do mestre | Mover + apagar satélite |
+| Nota granular histórica ("decidimos X em Y porque Z") | Registrar no `changelog.md` | Append + apagar satélite |
+| Lixo (rascunho, redundância, decisão revertida) | `memory/arquivo/` (retenção 90d) ou apagar direto | Mover ou apagar |
 
-### Passo 4: Compor novo handoff.md
+**Regra crítica:** antes de apagar qualquer arquivo, garantir que o conteúdo foi capturado em pelo menos um destino acima. Lixo só é deletado direto se for verificadamente redundante (ex: rascunho de algo que já está no mestre).
 
-`handoff.md` sempre é sobrescrito. Usar exatamente esta estrutura:
+### Passo 6 — Compor entrada do changelog.md
+
+`changelog.md` é **append-only** — adicionar entrada no final do arquivo, NUNCA editar entradas anteriores.
+
+Estrutura da entrada:
+
+```markdown
+## YYYY-MM-DD — <título da sessão>
+
+### Handoff anterior (substituído)
+<conteúdo integral do handoff.md que vai ser sobrescrito>
+
+### Decisões / mudanças
+- <decisão tomada nesta sessão>
+- <mudança implementada com link para PR/commit>
+
+### Notas granulares
+- <conteúdo dos satélites apagados>
+- <decisões intermediárias do tipo "tentamos X, voltamos pra Y">
+- <contexto de relacionamento, status atualizado de cliente, etc>
+
+### Lições promovidas
+- Para `documento_mestre.md`: <regras que subiram>
+- Para `aprendizados.md`: <lições que viraram parte do digest>
+- Para `<tema>_mestre.md`: <se algum satélite na raiz foi criado/atualizado>
+```
+
+### Passo 7 — Compor novo handoff.md
+
+Sobrescrever `memory/handoff.md` com sessão atual. Cap <50 linhas. Estrutura:
 
 ```markdown
 # Sessão YYYY-MM-DD — <nome-do-projeto>
@@ -67,167 +116,131 @@ Se algum deles não existir, tratar como vazio. Se `documento_mestre.md` não ex
 - <1 linha: o que foi feito, estado final>
 
 ## Próximos passos
-- <bullets, acionáveis, priorizados>
+- <bullets acionáveis, priorizados>
 
 ## Bloqueios
-- <somente se houver bloqueios — omitir a seção inteira caso contrário>
+- <só se houver — omitir seção senão>
 ```
 
-Regras:
-- Uma data por arquivo. Conteúdo anterior do handoff é substituído, não anexado.
-- Sem enchimento. Se "Próximos passos" estiver vazio, escrever "Nenhum.". Não inventar itens.
-- Linguagem direta, declarativa. Sem hedge.
-- Cap ~50 linhas. Se a sessão foi muito densa, condensar para o essencial.
+### Passo 8 — Atualizar aprendizados.md
 
-### Passo 5: Compor novo aprendizados.md (digest)
+`aprendizados.md` (raiz) é a memória curada persistente, lida no bootstrap. Cap <150 linhas.
 
-`aprendizados.md` também é sobrescrito, mas apenas depois de mesclar antigos + novos.
+Operações:
+- **Adicionar** lições novas no topo da categoria correspondente (Segurança / Infra / Negócio / Frontend / Process / etc).
+- **Atualizar sumário** de "Áreas cobertas" no topo se houve mudança de categoria.
+- **Remover** lições que viraram regra permanente (subiram pro mestre).
+- **Não inflar com nuance granular** — isso vai pro changelog.
 
-**Manter dos aprendizados existentes:**
-- Não-óbvios E ainda acionáveis.
-- Lições que, se esquecidas, causariam repetição de erro.
+Se passar de 150 linhas após edição, sugerir rodar `/otimizar-projeto` na próxima sessão para compactação.
 
-**Descartar dos aprendizados existentes:**
-- Bug fixes pontuais já refletidos no código.
-- Lições que viraram convenção do código (vivem no código agora).
-- Qualquer coisa genérica já coberta em arquivos de identidade global (ex: `~/.claude/soul.md`, CLAUDE.md).
-- Itens duplicados — mesclar em um.
-- **Itens já promovidos para `documento_mestre.md`** (na seção "Regras permanentes").
+### Passo 9 — Atualizar documento_mestre.md cirurgicamente
 
-**Adicionar do que veio da sessão de hoje:**
-- Aprendizados não-óbvios novos.
+Não sobrescrever — aplicar mudanças cirúrgicas:
+- **Header:** atualizar "Última atualização" para hoje.
+- **Status atual:** 1-3 frases sobre estado pós-sessão.
+- **Pendências:** marcar resolvidas com `~~[x]~~ → ver changelog YYYY-MM-DD`; adicionar novas com `[ ]`.
+- **Próximos passos:** atualizar conforme handoff.
+- **Regras permanentes:** adicionar regras promovidas nesta sessão.
+- **Decisões-chave:** adicionar decisões estruturais novas.
+- **Satélites:** se algum `<tema>_mestre.md` foi criado/atualizado, atualizar o ponteiro.
 
-**Cap:** ~150 linhas no total. Se exceder, comprimir mais mesclando itens similares.
+**Health check:**
 
-Formato:
-
-```markdown
-# Aprendizados — <nome-do-projeto>
-
-## <Categoria>
-- <lição direta de 1 linha>. Por quê: <opcional, mas útil para itens não-óbvios>.
-```
-
-Categorias emergem organicamente do conteúdo (ex: Segurança, Infra, Negócio, Performance). Não criar categorias vazias.
-
-### Passo 5.5: Identificar promoções para o documento_mestre
-
-Examinar a lista final de `aprendizados.md` (mesclada) e identificar entradas que **viraram regra permanente** — itens que:
-- O usuário cita repetidamente em sessões diferentes
-- Definem comportamento "sempre/nunca" para o projeto
-- São referência de decisão estrutural (não gotcha pontual)
-- O agente deveria ler **antes** de tocar em código relacionado
-
-Para cada candidato a promoção, preparar:
-1. **Para qual seção do mestre vai** — "Regras permanentes" (com sub-seção como "Operacional", "Segurança", "Frontend", "Compliance" etc.) OU "Decisões-chave" se for decisão estrutural.
-2. **Versão condensada da regra** — 1-2 linhas, formato "regra direta. Por quê: razão" (idêntico ao formato do mestre).
-3. **Confirmar que será removida do `aprendizados.md`** após promoção (anti-duplicação).
-
-### Passo 5.7: Atualizar documento_mestre.md (cirúrgico)
-
-Não sobrescrever o mestre. Aplicar mudanças cirúrgicas:
-- **Header:** atualizar "Última atualização" para a data de hoje.
-- **Status atual:** atualizar com 1-3 frases sobre o estado pós-sessão.
-- **Pendências abertas:** marcar com `~~[x]~~ → ver changelog` as que foram resolvidas; adicionar novas com `[ ]`.
-- **Próximos passos:** atualizar conforme handoff.md.
-- **Regras permanentes:** adicionar as promoções identificadas no Passo 5.5.
-- **Decisões-chave:** adicionar decisões estruturais novas da sessão.
-- **Roadmap:** marcar items concluídos, adicionar novos se aplicável.
-- **Árvore de arquivos:** se algum satélite foi criado/arquivado, atualizar (raro nesta skill — `/otimizar-projeto` é a skill primária pra isso).
-
-**Health check:** após as edições, verificar tamanho do mestre.
-
-| Linhas | Ação |
+| Linhas do mestre | Ação |
 |---|---|
-| <300 | 🟢 Tudo certo |
-| 300-500 | 🟡 Sugerir rodar `/otimizar-projeto` na próxima sessão |
-| >500 | 🔴 **Sugerir rodar `/otimizar-projeto` agora** após o /codex completar — split de seções com 50+ linhas para satélites `<PROJ>_<AREA>_<TEMA>.md` |
+| <300 | 🟢 |
+| 300-500 | 🟡 sugerir `/otimizar-projeto` na próxima sessão |
+| >500 | 🔴 sugerir `/otimizar-projeto` agora antes de continuar |
 
-### Passo 6: Mostrar drafts, pedir aprovação
+### Passo 10 — Mostrar drafts e pedir aprovação
 
-Antes de gravar, exibir ao usuário:
+Antes de gravar **qualquer coisa**, exibir ao usuário:
 
-1. O `handoff.md` proposto (conteúdo completo).
-2. O `aprendizados.md` proposto (conteúdo completo).
-3. As mudanças cirúrgicas no `documento_mestre.md` (formato diff: linhas adicionadas/removidas/modificadas, com seção).
-4. Resumo do diff: "Mantidos N itens dos aprendizados existentes, descartados M, adicionados K novos. **L promoções para documento_mestre.md.** Mestre agora com X linhas (🟢/🟡/🔴)."
+1. **Lista de operações no memory/** — para cada arquivo: ação proposta (promover/consolidar/registrar/apagar) + destino + 1 linha de justificativa
+2. **Entrada do changelog.md** completa
+3. **Novo handoff.md** completo
+4. **Diff do aprendizados.md** (linhas adicionadas/removidas)
+5. **Diff do documento_mestre.md** (mudanças cirúrgicas)
+6. **Resumo numérico:** "Triados N satélites: K promovidos, L consolidados, M registrados no changelog, P apagados. Mestre agora com X linhas (🟢/🟡/🔴)."
 
-Perguntar explicitamente: "Aprova para gravar?"
+Perguntar: **"Aprova para gravar?"**
 
-### Passo 7: Gravar apenas após aprovação
+### Passo 11 — Gravar apenas após aprovação
 
-- Aprovação: gravar os 3 arquivos com a tool Write/Edit (handoff e aprendizados sobrescritos; mestre editado de forma cirúrgica).
-- Redirecionamento: revisar com base no feedback do usuário, mostrar de novo. Não gravar até aprovação explícita.
-- Rejeição: parar. Não gravar parcialmente.
+- **Aprovação total:** gravar todos os arquivos. Apagar satélites de memory/ na ordem após registrar no changelog.
+- **Aprovação parcial:** ("aprovo 1, 3, 5 mas não 2"): só executar aprovados. Mostrar plano restante.
+- **Redirecionamento:** revisar conforme feedback, mostrar de novo. Não gravar até aprovação explícita.
+- **Rejeição:** parar. Não gravar parcialmente.
 
-Se o mestre passou para 🔴 (>500 linhas), terminar com a recomendação:
+Se mestre passou para 🔴 (>500 linhas), terminar com:
 > "documento_mestre.md está em [N] linhas (🔴). Recomendo rodar `/otimizar-projeto` agora para split em satélites antes de continuar."
 
-## Regras
+## Regras invioláveis
 
-- **Um projeto por invocação.** Nunca gravar em memória de múltiplos projetos numa execução.
-- **Nunca anexar** ao handoff ou aprendizados. Sempre ler → mesclar → sobrescrever.
-- **Documento mestre é editado, não sobrescrito.** Mudanças cirúrgicas preservam o que já está consolidado.
-- **Sem fabricação.** Se a sessão não produziu aprendizado, deixar o aprendizados.md intacto. Vazio é melhor que inventado. Mesma regra para promoções: só promover regras realmente ratificadas.
-- **Anti-duplicação.** Toda regra promovida para o mestre é REMOVIDA do aprendizados.md no mesmo turno.
-- **Aprendizados cross-project** vão para `memory/incoming-learnings.md` do projeto destino, nunca direto edit.
-- **Idioma:** escrever os arquivos de memória em PT-BR. Headers, estrutura e exemplos em PT-BR independente da língua de trabalho da sessão (a comunicação técnica com Claude Code/SDK/MCP segue em EN naturalmente).
+1. **Um projeto por invocação.** Nunca gravar em memória de múltiplos projetos numa execução.
+2. **`changelog.md` é append-only.** NUNCA editar entradas antigas. NUNCA apagar.
+3. **`<tema>_mestre.md` na raiz não são tocados.** Apenas `/otimizar-projeto` faz split do mestre criando-os; depois disso, são responsabilidade humana ou de `/otimizar-projeto`.
+4. **Apagar satélite só depois de capturar em changelog ou outro destino.** Lixo verificadamente redundante pode ir direto.
+5. **Triagem sempre passa por aprovação.** Sem aprovação, não apaga, não grava.
+6. **Anti-fragmentação na criação de `<tema>_mestre.md`.** Promover satélite ad-hoc para a raiz só quando o conteúdo é fonte de verdade de um tema grande (50+ linhas, escopo único, persistente). Não promover por impulso.
+7. **Aprendizados cross-project** vão para `<projeto-destino>/memory/incoming-learnings.md`, não direto edit.
+8. **Idioma:** todos os arquivos de memória em PT-BR. Comunicação técnica com Claude Code/SDK/MCP/docs Anthropic em EN naturalmente.
 
 ## Exemplo de saída
 
-### handoff.md
+### Entrada appendada ao changelog.md
 
 ```markdown
-# Sessão 2026-04-17 — viabox
+## 2026-04-29 — Refactor para nova convenção de memória
+
+### Handoff anterior (substituído)
+# Sessão 2026-04-27 — projeto-fullcred
+## Handoff
+- PR #32 mergeado (v1.2.3): system metrics dashboard...
+[...]
+
+### Decisões / mudanças
+- Migrado mestre + aprendizados para a raiz do projeto
+- Criado changelog.md (este arquivo) — append-only
+- Triados 39 satélites legacy do memory/ (ver "Notas granulares" abaixo)
+
+### Notas granulares
+- project_app_jsx_refactor_pending.md → conteúdo já refletido na pendência "App.jsx routing refactor" do mestre, satélite apagado
+- feedback_no_auto_git.md → regra já promovida no mestre seção "Regras permanentes > Operacional", satélite apagado
+[...39 entradas similares...]
+
+### Lições promovidas
+- Para documento_mestre.md: nenhuma (todas já estavam)
+- Para aprendizados.md: "memory/ é working space transiente, nunca persistir info crítica lá"
+```
+
+### Novo handoff.md
+
+```markdown
+# Sessão 2026-04-29 — projeto-fullcred
 
 ## Handoff
-- Validação dos testes e2e para features de upload do MVP. 15/15 passaram.
+- Refactor concluído: convenção de duas camadas aplicada (raiz permanente + memory/ transiente). 39 satélites legacy triados.
 
 ## Próximos passos
-- Deploy em staging.
-- Agendar revisão de segurança com auditor externo.
-
-## Bloqueios
-- Aguardando API key do provedor de auth third-party.
+- ZIP download de documentos
+- Histórico do cliente na proposta
+- Validar checkbox 4×4 da landing page
 ```
 
-### aprendizados.md
-
-```markdown
-# Aprendizados — viabox
-
-## Segurança
-- Bypass de file size no pentest de upload. Fixed via max upload sizing. Por quê: atacante conseguia burlar o check de MIME spoofando a extensão num arquivo que excedia checks de content-type só depois do estágio de descompressão.
-
-## Infra
-- Hetzner CX33 chega a 85% CPU em rebuilds Docker. Por quê: instância sizeada para steady-state, não burst.
-
-## Negócio
-- Conversão da landing page +40% quando o campo telefone vira opcional. Por quê: leads de real estate resistem a dar telefone de cara.
-```
-
-### Edição cirúrgica do documento_mestre.md (exemplo de diff proposto)
+### Diff cirúrgico do documento_mestre.md
 
 ```diff
- # viabox — Documento Mestre
-
--> Última atualização: 14/04/2026
-+> Última atualização: 17/04/2026
- > Status: MVP em produção
+ # projeto-fullcred — Documento Mestre
+-> Última atualização: 27/04/2026
++> Última atualização: 29/04/2026
+ > Status: produção (v1.2.3)
 
  ## Status atual
--MVP rodando, próximo marco é deploy em staging.
-+MVP rodando, e2e tests 15/15 passando. Próximo marco: deploy em staging
-+pós-revisão de segurança externa.
+-v1.2.3 em produção. Mason audit cycle ativo. LP rewrite concluído.
++v1.2.3 em produção. Refactor de memória concluído (29/04). Mason audit cycle ativo.
 
- ## Pendências abertas
--- [ ] Validar e2e tests
--- [ ] Agendar revisão de segurança
-+- ~~[x] Validar e2e tests~~ → 15/15 passaram, ver handoff 17/04
-+- [ ] Agendar revisão de segurança com auditor externo
-
- ## Regras permanentes
-+
-+### Segurança
-+- Validar tamanho de upload em servidor, não confiar em content-type. Por quê: bypass via spoofing de extensão em arquivo grande.
+ ## Satélites
++- `<tema>_mestre.md`: nenhum criado nesta sessão.
 ```
