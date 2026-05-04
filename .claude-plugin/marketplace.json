@@ -10,9 +10,9 @@
   "plugins": [
     {
       "name": "claude-codex",
-      "version": "0.1.0",
+      "version": "0.6.0",
       "source": "./plugin",
-      "description": "Rolling-digest session memory. The /codex skill keeps project HANDOFF.md and learnings.md small, current, and load-bearing."
+      "description": "Memória de projeto em duas camadas (raiz permanente + memory/ transiente). /codex faz faxina por sessão: tria memory/, append no changelog (append-only), sobrescreve handoff, atualiza mestre cirurgicamente, e fecha sessão com commit + push em dev (com aprovação). /otimizar-projeto faz higiene macro: split do mestre, compactação de aprendizados, arquivamento por idade. Changelog é imutável."
     }
   ]
 }
