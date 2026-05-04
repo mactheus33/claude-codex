@@ -1,7 +1,7 @@
 ---
 name: codex
 description: Use esta skill quando o usuário invocar "/codex", ou pedir para "encerrar a sessão", "fechar", "salvar handoff", "atualizar memória do projeto", "compactar memória", "escrever resumo de sessão", "limpar memory", ou qualquer frase indicando que a sessão deve ser encerrada. Faz faxina completa do memory/ do projeto, sintetiza conteúdo (regras → mestre, lições → aprendizados, notas granulares → changelog), sobrescreve handoff e atualiza documento_mestre cirurgicamente. Escreve apenas após aprovação.
-version: 0.5.0
+version: 0.6.0
 ---
 
 # Codex — Faxineiro de Sessão + Rolling Digest
@@ -176,6 +176,40 @@ Perguntar: **"Aprova para gravar?"**
 Se mestre passou para 🔴 (>500 linhas), terminar com:
 > "documento_mestre.md está em [N] linhas (🔴). Recomendo rodar `/otimizar-projeto` agora para split em satélites antes de continuar."
 
+### Passo 12 — Commit + push em dev
+
+Após gravação aprovada (Passo 11), fechar a sessão no Git. Resolve o empilhamento de mudanças locais não pushadas entre sessões.
+
+1. **Verificar branch.** `git branch --show-current`. Se NÃO for `dev`, **bloquear**:
+   > "Estou em `<branch>`. /codex commita apenas em `dev`. Sai com `git checkout dev` e roda /codex de novo, ou faz o commit manualmente."
+   Nunca trocar branch automaticamente. Nunca commitar em `main`.
+
+2. **Detectar escopo.** Rodar `git status` no diretório do projeto. Se houver mudanças em **múltiplos repos** (ex: sessão tocou `<projeto>/` E `~/.claude/`), parar e pedir orientação ao usuário com `git status` de cada repo. NÃO commitar cross-repo automaticamente.
+
+3. **Mostrar diff resumido.** Exibir `git status` + lista de arquivos modificados. Diff completo só se usuário pedir.
+
+4. **Compor mensagem de commit** a partir do handoff e do changelog desta sessão:
+   - **Título:** `chore(memory): <título da sessão do handoff>` — mesmo título usado no changelog (Passo 6).
+   - **Body:** os 5 primeiros bullets da seção "Decisões / mudanças" da entrada do changelog. Se houver menos, listar todos. Se houver mais, truncar a 5 e omitir o resto (changelog tem o detalhe completo).
+
+5. **Pedir aprovação explícita:**
+   > "Vou commitar TUDO acima em `dev` e dar push com a mensagem:
+   > ```
+   > <título>
+   >
+   > <body>
+   > ```
+   > Aprova?"
+
+   Default seguro: sem "sim" explícito, **não commita**. Não há flag de bypass.
+
+6. **Após aprovação:**
+   - `git add -A` (escopo: tudo dirty no working tree)
+   - `git commit -m "<título>" -m "<body>"`
+   - `git push` — se branch sem upstream, `git push -u origin dev`
+
+7. **Confirmar resultado:** mostrar SHA curto do commit + branch remoto. Se push falhar (ex: divergência com origin), parar e pedir orientação — nunca force push.
+
 ## Regras invioláveis
 
 1. **Um projeto por invocação.** Nunca gravar em memória de múltiplos projetos numa execução.
@@ -186,6 +220,7 @@ Se mestre passou para 🔴 (>500 linhas), terminar com:
 6. **Anti-fragmentação na criação de `<tema>_mestre.md`.** Promover satélite ad-hoc para a raiz só quando o conteúdo é fonte de verdade de um tema grande (50+ linhas, escopo único, persistente). Não promover por impulso.
 7. **Aprendizados cross-project** vão para `<projeto-destino>/memory/incoming-learnings.md`, não direto edit.
 8. **Idioma:** todos os arquivos de memória em PT-BR. Comunicação técnica com Claude Code/SDK/MCP/docs Anthropic em EN naturalmente.
+9. **Commit final em `dev`, sempre com aprovação explícita.** /codex nunca commita em `main`. Nunca commita sem mostrar `git status` e pedir "aprova?". Sem flag de auto-commit. Sem force push. Cross-repo pausa e pede orientação.
 
 ## Exemplo de saída
 

@@ -1,7 +1,7 @@
 {
   "name": "claude-codex",
-  "description": "Memória de projeto em duas camadas (raiz permanente + memory/ transiente). /codex faz faxina por sessão: tria memory/, append no changelog (append-only), sobrescreve handoff, atualiza mestre cirurgicamente. /otimizar-projeto faz higiene macro: split do mestre, compactação de aprendizados, arquivamento por idade. Changelog é imutável.",
-  "version": "0.5.0",
+  "description": "Memória de projeto em duas camadas (raiz permanente + memory/ transiente). /codex faz faxina por sessão: tria memory/, append no changelog (append-only), sobrescreve handoff, atualiza mestre cirurgicamente, e fecha sessão com commit + push em dev (com aprovação). /otimizar-projeto faz higiene macro: split do mestre, compactação de aprendizados, arquivamento por idade. Changelog é imutável.",
+  "version": "0.6.0",
   "author": {
     "name": "Matheus Furtado Drummond"
   }
