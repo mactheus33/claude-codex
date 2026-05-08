@@ -180,19 +180,33 @@ Se mestre passou para 🔴 (>500 linhas), terminar com:
 
 Após gravação aprovada (Passo 11), fechar a sessão no Git. Resolve o empilhamento de mudanças locais não pushadas entre sessões.
 
-1. **Verificar branch.** `git branch --show-current`. Se NÃO for `dev`, **bloquear**:
-   > "Estou em `<branch>`. /codex commita apenas em `dev`. Sai com `git checkout dev` e roda /codex de novo, ou faz o commit manualmente."
-   Nunca trocar branch automaticamente. Nunca commitar em `main`.
+#### Detecção de escopo
 
-2. **Detectar escopo.** Rodar `git status` no diretório do projeto. Se houver mudanças em **múltiplos repos** (ex: sessão tocou `<projeto>/` E `~/.claude/`), parar e pedir orientação ao usuário com `git status` de cada repo. NÃO commitar cross-repo automaticamente.
+Antes de qualquer commit, **detectar quantos repos estão dirty** e classificar:
 
-3. **Mostrar diff resumido.** Exibir `git status` + lista de arquivos modificados. Diff completo só se usuário pedir.
+1. **Repo do projeto ativo** — sempre o primeiro candidato. `git status` lá.
+2. **Outros repos da mesma empresa** — descobrir via frontmatter `empresa: <slug>` no `<projeto>/CLAUDE.md` (convenção em `~/.claude/shared/memory-convention.md`). Escanear `~/projetos-claude/*/CLAUDE.md`, filtrar pelo slug da empresa ativa, rodar `git status` em cada.
+3. **Cross-empresa** — se `git status` revelar dirty em repo de outra empresa, **bloquear**: "Detectei dirty em `<repo>` que pertence a `<outra-empresa>`. /codex não cruza empresas. Resolva manualmente."
+4. **Meta-projeto (`~/.claude/`)** — caso especial. Se sessão é modo claude-identity, ele é o repo "ativo" e sai pelo fluxo padrão (sem multi-repo). Se sessão é de projeto e `~/.claude/` aparece dirty, isso é cross-escopo (não cross-empresa) — pausar e pedir orientação ao usuário.
 
-4. **Compor mensagem de commit** a partir do handoff e do changelog desta sessão:
+#### Branch enforcement
+
+Para **cada** repo a tocar (projeto ativo + repos da mesma empresa):
+- `git branch --show-current` em cada
+- Se NÃO for `dev`, **bloquear** apenas aquele repo: "Repo `<nome>` está em `<branch>`. /codex commita apenas em `dev`. Esse repo fica fora — resolva manualmente. Sigo com os outros?"
+- Nunca trocar branch automaticamente. Nunca commitar em `main`.
+
+#### Modo single-repo (escopo padrão)
+
+Apenas o repo do projeto ativo está dirty. Fluxo simples:
+
+1. **Mostrar diff resumido.** `git status` + lista de arquivos. Diff completo só se usuário pedir.
+
+2. **Compor mensagem de commit** a partir do handoff e do changelog desta sessão:
    - **Título:** `chore(memory): <título da sessão do handoff>` — mesmo título usado no changelog (Passo 6).
-   - **Body:** os 5 primeiros bullets da seção "Decisões / mudanças" da entrada do changelog. Se houver menos, listar todos. Se houver mais, truncar a 5 e omitir o resto (changelog tem o detalhe completo).
+   - **Body:** os 5 primeiros bullets da seção "Decisões / mudanças" da entrada do changelog. Se houver menos, listar todos. Se houver mais, truncar a 5 e omitir o resto.
 
-5. **Pedir aprovação explícita:**
+3. **Pedir aprovação explícita:**
    > "Vou commitar TUDO acima em `dev` e dar push com a mensagem:
    > ```
    > <título>
@@ -201,18 +215,60 @@ Após gravação aprovada (Passo 11), fechar a sessão no Git. Resolve o empilha
    > ```
    > Aprova?"
 
-   Default seguro: sem "sim" explícito, **não commita**. Não há flag de bypass.
+   Default seguro: sem "sim" explícito, **não commita**.
 
-6. **Após aprovação:**
-   - `git add -A` (escopo: tudo dirty no working tree)
+4. **Após aprovação:**
+   - `git add -A`
    - `git commit -m "<título>" -m "<body>"`
    - `git push` — se branch sem upstream, `git push -u origin dev`
 
-7. **Confirmar resultado:** mostrar SHA curto do commit + branch remoto. Se push falhar (ex: divergência com origin), parar e pedir orientação — nunca force push.
+5. **Confirmar resultado:** SHA curto + branch remoto.
+
+#### Modo multi-repo (mesma empresa)
+
+Múltiplos repos da mesma empresa estão dirty (ex: sessão tocou `projeto-fullcred` E `fullcred-institucional`). Fluxo expandido:
+
+1. **Listar todos os repos dirty da empresa**, com `git status --short` resumido em cada.
+
+2. **Classificar cada repo por origem do dirty:**
+   - **Editado nesta sessão** — recebe commit normal com mensagem do changelog/handoff.
+   - **Dirty drift pré-existente** — recebe commit de saneamento com mensagem clara ("chore(saneamento): commit de dirty drift detectado em `/codex` da sessão YYYY-MM-DD" + lista dos arquivos). Cobertura da exceção cirúrgica do CLAUDE.md global.
+
+3. **Compor mensagem por repo:**
+   - Repos editados na sessão: mesmo formato do single-repo (título + 5 bullets), mas **filtrar bullets relevantes àquele repo** quando possível (se a entrada do changelog tem decisões que tocam só um repo, a mensagem dele só leva esses bullets).
+   - Repos com dirty drift: título "chore(saneamento): dirty drift detectado em bootstrap" + body listando os arquivos commitados.
+
+4. **Pedir aprovação consolidada:**
+   > "Vou commitar **N repos** da empresa `<slug>` em sequência:
+   >
+   > **Repo 1: `<nome>`** (editado nesta sessão)
+   > Mensagem: `<título>`
+   > <body>
+   >
+   > **Repo 2: `<nome>`** (dirty drift, saneamento)
+   > Mensagem: `<título saneamento>`
+   > <body>
+   >
+   > Aprova todos? (ou diga quais aprovar — `aprovo 1, 3` / `só 1` / `cancela tudo`)"
+
+5. **Após aprovação:** loop sequencial, um repo por vez:
+   - `cd <repo>`
+   - `git add -A`
+   - `git commit -m "<título>" -m "<body>"`
+   - `git push` (ou `push -u origin dev` se sem upstream)
+   - Reportar SHA curto + nome do repo
+   - Se algum push falhar: parar o loop, reportar qual repo, perguntar se segue ou pausa. Nunca force push.
+
+6. **Confirmar resultado consolidado:** lista final de SHAs por repo.
+
+#### Aprovação parcial / rejeição
+
+- **Aprovação parcial:** ("aprovo 1, 3 mas não 2") → executar só os aprovados, reportar os pulados como pendentes pra próxima sessão.
+- **Rejeição total:** parar. Working tree fica como está. Reportar como pendência no próximo bootstrap.
 
 ## Regras invioláveis
 
-1. **Um projeto por invocação.** Nunca gravar em memória de múltiplos projetos numa execução.
+1. **Um projeto ativo por invocação para edição de memória.** Triagem de `memory/`, edição de mestre/aprendizados/handoff/changelog acontecem **apenas no projeto ativo da sessão**. Nunca gravar em memória de outro projeto. (Exceção do Passo 12 é apenas commit/push de dirty pré-existente, sem editar conteúdo.)
 2. **`changelog.md` é append-only.** NUNCA editar entradas antigas. NUNCA apagar.
 3. **`<tema>_mestre.md` na raiz não são tocados.** Apenas `/otimizar-projeto` faz split do mestre criando-os; depois disso, são responsabilidade humana ou de `/otimizar-projeto`.
 4. **Apagar satélite só depois de capturar em changelog ou outro destino.** Lixo verificadamente redundante pode ir direto.
@@ -220,7 +276,7 @@ Após gravação aprovada (Passo 11), fechar a sessão no Git. Resolve o empilha
 6. **Anti-fragmentação na criação de `<tema>_mestre.md`.** Promover satélite ad-hoc para a raiz só quando o conteúdo é fonte de verdade de um tema grande (50+ linhas, escopo único, persistente). Não promover por impulso.
 7. **Aprendizados cross-project** vão para `<projeto-destino>/memory/incoming-learnings.md`, não direto edit.
 8. **Idioma:** todos os arquivos de memória em PT-BR. Comunicação técnica com Claude Code/SDK/MCP/docs Anthropic em EN naturalmente.
-9. **Commit final em `dev`, sempre com aprovação explícita.** /codex nunca commita em `main`. Nunca commita sem mostrar `git status` e pedir "aprova?". Sem flag de auto-commit. Sem force push. Cross-repo pausa e pede orientação.
+9. **Commit final em `dev`, sempre com aprovação explícita.** /codex nunca commita em `main`. Nunca commita sem mostrar `git status` e pedir "aprova?". Sem flag de auto-commit. Sem force push. **Multi-repo da mesma empresa permitido** (Passo 12 modo multi-repo) — cross-empresa **bloqueia**.
 
 ## Exemplo de saída
 
