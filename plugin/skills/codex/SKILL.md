@@ -274,7 +274,7 @@ Múltiplos repos da mesma empresa estão dirty (ex: sessão tocou `projeto-fullc
 4. **Apagar satélite só depois de capturar em changelog ou outro destino.** Lixo verificadamente redundante pode ir direto.
 5. **Triagem sempre passa por aprovação.** Sem aprovação, não apaga, não grava.
 6. **Anti-fragmentação na criação de `<tema>_mestre.md`.** Promover satélite ad-hoc para a raiz só quando o conteúdo é fonte de verdade de um tema grande (50+ linhas, escopo único, persistente). Não promover por impulso.
-7. **Aprendizados cross-project** vão para `<projeto-destino>/memory/incoming-learnings.md`, não direto edit.
+7. **Recados cross-project / cross-sessão** vão para `~/.claude/inbox.md` (caixa de correio global), nunca direto edit no repo de outro projeto. Append de um bloco `## → <destino> · <data> · [ação|aprendizado]`. O destino consome no bootstrap dele. Inversamente, ao processar o projeto ativo, drenar os blocos `→ <projeto ativo>` que existirem no inbox: aplicar no destino, registrar no changelog, remover o bloco. (`incoming-learnings.md` por-projeto foi aposentado em 2026-06-05 — não criar nem escrever nesses arquivos.)
 8. **Idioma:** todos os arquivos de memória em PT-BR. Comunicação técnica com Claude Code/SDK/MCP/docs Anthropic em EN naturalmente.
 9. **Commit final em `dev`, sempre com aprovação explícita.** /codex nunca commita em `main`. Nunca commita sem mostrar `git status` e pedir "aprova?". Sem flag de auto-commit. Sem force push. **Multi-repo da mesma empresa permitido** (Passo 12 modo multi-repo) — cross-empresa **bloqueia**.
 
