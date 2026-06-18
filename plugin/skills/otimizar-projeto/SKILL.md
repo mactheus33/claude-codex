@@ -1,7 +1,7 @@
 ---
 name: otimizar-projeto
-description: Use esta skill quando o usuário invocar "/otimizar-projeto", ou pedir para "otimizar memória do projeto", "split do mestre", "compactar aprendizados", "limpar memory antigo", "higiene do projeto". Operações pesadas de manutenção da memória do projeto: splits estruturais em satélites, mesclagem de lições, scan e arquivamento de arquivos antigos no memory/. Plano antes de execução. NUNCA toca em changelog.md. A contenção dos caps em palavras (mestre ~600 / aprendizados ~800 / handoff ~250) é responsabilidade do /codex a cada fechamento — esta skill é higiene macro sob demanda.
-version: 1.0.0
+description: Use esta skill quando o usuário invocar "/otimizar-projeto", ou pedir para "otimizar memória do projeto", "split do mestre", "compactar aprendizados", "limpar memory antigo", "higiene do projeto". Operações pesadas de manutenção da memória do projeto: splits estruturais em satélites, mesclagem de lições, scan e arquivamento de arquivos antigos no memory/, sweep de pointers dangling em todos os roteadores. Plano antes de execução. NUNCA toca em changelog.md. A contenção dos caps em palavras (mestre ~600 / aprendizados ~800 / handoff ~250) é responsabilidade do /codex a cada fechamento — esta skill é higiene macro sob demanda.
+version: 1.1.0
 ---
 
 # Otimizar Projeto — Higiene Macro da Memória
@@ -78,6 +78,12 @@ MEMORY/
 
 > 🟡/🔴 na raiz indica que o `/codex` deixou cap estourado passar — sinal de fechamento incompleto, não de fluxo normal. Esta skill corrige o acumulado; a contenção contínua é do `/codex`.
 
+### Passo 2.5 — Varredura de integridade de pointers (rot herdado)
+
+O `/codex` checa pointers só nos arquivos que toca na sessão (Passo 9.5 da skill). Esta skill é o lugar do **sweep completo**: varrer TODOS os pointers de TODOS os roteadores, não só os tocados — senão o rot acumulado nunca é colhido (pointer-rot compõe a cada run e pode ficar dangling por semanas).
+
+Para cada referência a arquivo (`<tema>_mestre.md`, `memory/*.md`, `.agents/*`, `index.md`, qualquer `<nome>.md`) em `documento_mestre.md`, `aprendizados.md` e em cada `<tema>_mestre.md` da raiz, checar existência no disco (`test -e` / `Test-Path`). Toda referência dangling vira item de plano no Passo 4 (categoria "LIMPEZA DE POINTERS"): limpar a referência morta ou recriar o arquivo. `changelog.md` não é varrido (imutável) e suas refs históricas não contam como rot.
+
 ### Passo 3 — Análise profunda
 
 Para cada arquivo 🔴 ou 🟡, analisar conteúdo e propor ação.
@@ -115,9 +121,13 @@ COMPACTAÇÃO DE APRENDIZADOS (X ações)
 3. [aprendizados.md] Mesclar 4 entradas similares na seção Segurança em 1 entrada consolidada
 4. [aprendizados.md] Promover regra "X" da seção Process para o mestre (deveria ter ido via /codex)
 
+LIMPEZA DE POINTERS (X ações)
+5. [documento_mestre.md] ref dangling `index.md` (deletado em DD/MM) → remover do Mapa de satélites
+6. [aprendizados.md] ref dangling `memory/project_foo.md` → remover
+
 ARQUIVAMENTO DE MEMORY/ (X ações)
-5. [memory/feedback_old_thing.md] >100 dias, conteúdo já refletido em código → memory/arquivo/
-6. [memory/project_dead.md] decisão revertida em sessão posterior → memory/arquivo/
+7. [memory/feedback_old_thing.md] >100 dias, conteúdo já refletido em código → memory/arquivo/
+8. [memory/project_dead.md] decisão revertida em sessão posterior → memory/arquivo/
 
 SUB-SPLIT (X ações)
 7. [stripe_mestre.md] Seção "Webhooks" (110 linhas) → criar stripe_webhooks_mestre.md na raiz
@@ -227,6 +237,7 @@ Se restou item 🟡/🔴 não aprovado:
 - **Nunca apagar conteúdo direto** — sempre move (changelog, satélite ou `memory/arquivo/`).
 - **Nunca criar mais de 3 satélites por execução** — anti-fragmentação.
 - **Nunca quebrar links bidirecionais** — todo `<tema>_mestre.md` tem header `> Documento pai: documento_mestre.md`, e o mestre tem ponteiro descendente.
+- **Sweep de pointers a cada execução** (Passo 2.5) — varrer TODOS os roteadores, não só os tocados; toda ref dangling vira item de plano. É o lugar do rot herdado acumulado; o /codex só pega o da própria sessão.
 - **Sempre ler o arquivo antes de alterar** — nada de editar sem entender o conteúdo.
 - **Sempre mostrar antes/depois** para alterações em arquivos existentes.
 - **Idioma:** PT-BR para todos os arquivos de memória.

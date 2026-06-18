@@ -1,7 +1,7 @@
 ---
 name: codex
 description: Use esta skill quando o usuário invocar "/codex", ou pedir para "encerrar a sessão", "fechar", "salvar handoff", "atualizar memória do projeto", "compactar memória", "escrever resumo de sessão", "limpar memory", ou qualquer frase indicando que a sessão deve ser encerrada. Faz faxina completa do memory/ do projeto, sintetiza conteúdo (regras → mestre, lições → aprendizados, notas granulares → changelog), sobrescreve handoff e atualiza documento_mestre cirurgicamente. Escreve apenas após aprovação.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Codex — Faxineiro de Sessão + Rolling Digest
@@ -164,6 +164,18 @@ O mestre é um **ÍNDICE** — dá o recado e roteia. Cap **~600 palavras**. Nã
 
 Nunca "sugerir `/otimizar-projeto` pra depois" como resposta a cap estourado — a contenção é deste fechamento. `/otimizar-projeto` fica pra higiene macro (splits grandes, arquivamento por idade).
 
+### Passo 9.5 — Verificação de integridade antes de gravar
+
+Dois checks **obrigatórios** sobre os drafts dos Passos 6/8/9, rodados antes de exibir no Passo 10. Ambos nascem de falhas reais que a auditoria pós-poda pegou (Fullcred + Argus, 15/06/2026): pointer-rot que compõe a cada run, e claims de poda afirmando destino não-verificado. A skill deve pegá-los sozinha — não depender de auditoria humana posterior.
+
+**A. Integridade de pointer.** Para cada referência a arquivo (`<tema>_mestre.md`, `memory/*.md`, `.agents/*`, `index.md`, qualquer `<nome>.md`) que apareça nos arquivos de roteamento a gravar (mestre, aprendizados, satélites), checar existência no disco (`test -e` / `Test-Path`). Referência dangling (aponta pra arquivo que não existe) = **flag obrigatório no resumo do Passo 10**. Resolver antes de gravar: limpar a referência morta ou criar o arquivo. Pointer-rot **compõe a cada run** — cada /codex herda os dangling do mestre anterior e os carrega adiante (inclusive pra satélites novos) se não detectar. Não deixar passar silencioso.
+
+**B. Verificação de claim de poda.** Todo item da seção "Podas" (Passo 6) que afirme um destino deve ser **confirmado no destino ANTES de escrever o changelog** — nunca asserir destino não-verificado:
+- Formato "lição/regra X → virou regra no mestre / satélite / skill Y": `grep` por X no destino Y. Se não confirmar, ou **corrige o gap** (escreve a regra no destino) ou **reescreve o claim** como "removido (rastro só no git/changelog)".
+- Formato "seção digest / Decisões-chave deletada → tudo já no changelog": caso **mais perigoso** (parece redundante, mas pode ser a única cópia). Teste barato e decisivo: **extrair os code-spans (`` `...` ``) dos arquivos pré-poda e grepar cada um no corpus pós-poda** (changelog + mestre + aprendizados + satélites). Code-span que sumiu = conteúdo digest-only perdido → resgatar pro changelog antes do delete.
+
+Falha em qualquer um dos dois = não gravar até resolver; o resultado dos checks entra no resumo do Passo 10.
+
 ### Passo 10 — Mostrar drafts e pedir aprovação
 
 Antes de gravar **qualquer coisa**, exibir ao usuário:
@@ -174,6 +186,7 @@ Antes de gravar **qualquer coisa**, exibir ao usuário:
 4. **Diff do aprendizados.md** (lições adicionadas E removidas por GC)
 5. **Diff do documento_mestre.md** (mudanças cirúrgicas, incluindo status substituído e pendências removidas)
 6. **Resumo numérico:** "Triados N satélites: K promovidos, L consolidados, M registrados no changelog, P apagados. GC removeu Q lições absorvidas. Mestre: X palavras / aprendizados: Y palavras / handoff: Z palavras (caps 600/800/250)."
+7. **Resultado da verificação de integridade (Passo 9.5):** pointers dangling encontrados (e ação tomada) + claims de poda confirmados / corrigidos / reescritos. "Nenhum" explícito se passou limpo.
 
 Perguntar: **"Aprova para gravar?"**
 
@@ -287,6 +300,7 @@ Múltiplos repos da mesma empresa estão dirty (ex: sessão tocou `projeto-fullc
 7. **Recados cross-project / cross-sessão** vão para o **inbox do destino**: `<projeto-destino>/inbox.md` na raiz do projeto-destino (ou `~/.claude/inbox.md` se o destino é o meta-projeto). Append de um bloco `## <data> · [ação|aprendizado]`, nunca tocar outros arquivos do repo de outro projeto. Cada projeto tem sua própria caixa, isolada por repo — não há inbox global compartilhado entre destinos. Inversamente, ao processar o projeto ativo, drenar o `<projeto-ativo>/inbox.md`: aplicar cada bloco, registrar no changelog, remover o bloco. (Modelo de duas caixas desde 2026-06-05; `incoming-learnings.md` por-projeto e o inbox global único foram ambos aposentados — não criar nem escrever neles.)
 8. **Idioma:** todos os arquivos de memória em PT-BR. Comunicação técnica com Claude Code/SDK/MCP/docs Anthropic em EN naturalmente.
 9. **Commit final em `dev`, sempre com aprovação explícita.** /codex nunca commita em `main`. Nunca commita sem mostrar `git status` e pedir "aprova?". Sem flag de auto-commit. Sem force push. **Multi-repo da mesma empresa permitido** (Passo 12 modo multi-repo) — cross-empresa **bloqueia**.
+10. **Nunca afirmar destino não-verificado nem carregar pointer dangling** (Passo 9.5). Claim de poda ("X → virou regra em Y" / "seção deletada → tudo no changelog") só vai pro changelog depois de confirmado no destino por `grep`; senão corrige o gap ou reescreve como "removido (rastro só no git/changelog)". Referência a arquivo nos roteadores só fica se o arquivo existe no disco.
 
 ## Exemplo de saída
 
