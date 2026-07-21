@@ -166,7 +166,7 @@ Nunca "sugerir `/otimizar-projeto` pra depois" como resposta a cap estourado —
 
 ### Passo 9.5 — Verificação de integridade antes de gravar
 
-Dois checks **obrigatórios** sobre os drafts dos Passos 6/8/9, rodados antes de exibir no Passo 10. Ambos nascem de falhas reais que a auditoria pós-poda pegou (Fullcred + Argus, 15/06/2026): pointer-rot que compõe a cada run, e claims de poda afirmando destino não-verificado. A skill deve pegá-los sozinha — não depender de auditoria humana posterior.
+Dois checks **obrigatórios** sobre os drafts dos Passos 6/8/9, rodados antes de exibir no Passo 10. Ambos nascem de falhas reais pegas em auditoria pós-poda: pointer-rot que compõe a cada run, e claims de poda afirmando destino não-verificado. A skill deve pegá-los sozinha — não depender de auditoria humana posterior.
 
 **A. Integridade de pointer.** Para cada referência a arquivo (`<tema>_mestre.md`, `memory/*.md`, `.agents/*`, `index.md`, qualquer `<nome>.md`) que apareça nos arquivos de roteamento a gravar (mestre, aprendizados, satélites), checar existência no disco (`test -e` / `Test-Path`). Referência dangling (aponta pra arquivo que não existe) = **flag obrigatório no resumo do Passo 10**. Resolver antes de gravar: limpar a referência morta ou criar o arquivo. Pointer-rot **compõe a cada run** — cada /codex herda os dangling do mestre anterior e os carrega adiante (inclusive pra satélites novos) se não detectar. Não deixar passar silencioso.
 
@@ -249,7 +249,7 @@ Apenas o repo do projeto ativo está dirty. Fluxo simples:
 
 #### Modo multi-repo (mesma empresa)
 
-Múltiplos repos da mesma empresa estão dirty (ex: sessão tocou `projeto-fullcred` E `fullcred-institucional`). Fluxo expandido:
+Múltiplos repos da mesma empresa estão dirty (ex: sessão tocou `projeto-alfa` E `alfa-institucional`). Fluxo expandido:
 
 1. **Listar todos os repos dirty da empresa**, com `git status --short` resumido em cada.
 
@@ -310,7 +310,7 @@ Múltiplos repos da mesma empresa estão dirty (ex: sessão tocou `projeto-fullc
 ## 2026-04-29 — Refactor para nova convenção de memória
 
 ### Handoff anterior (substituído)
-# Sessão 2026-04-27 — projeto-fullcred
+# Sessão 2026-04-27 — projeto-exemplo
 ## Handoff
 - PR #32 mergeado (v1.2.3): system metrics dashboard...
 [...]
@@ -333,7 +333,7 @@ Múltiplos repos da mesma empresa estão dirty (ex: sessão tocou `projeto-fullc
 ### Novo handoff.md
 
 ```markdown
-# Sessão 2026-04-29 — projeto-fullcred
+# Sessão 2026-04-29 — projeto-exemplo
 
 ## Handoff
 - Refactor concluído: convenção de duas camadas aplicada (raiz permanente + memory/ transiente). 39 satélites legacy triados.
@@ -347,7 +347,7 @@ Múltiplos repos da mesma empresa estão dirty (ex: sessão tocou `projeto-fullc
 ### Diff cirúrgico do documento_mestre.md
 
 ```diff
- # projeto-fullcred — Documento Mestre
+ # projeto-exemplo — Documento Mestre
 -> Última atualização: 27/04/2026
 +> Última atualização: 29/04/2026
  > Status: produção (v1.2.3)
