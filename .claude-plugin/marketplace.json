@@ -10,9 +10,9 @@
   "plugins": [
     {
       "name": "claude-codex",
-      "version": "0.6.0",
+      "version": "1.1.1",
       "source": "./plugin",
-      "description": "Memória de projeto em duas camadas (raiz permanente + memory/ transiente). /codex faz faxina por sessão: tria memory/, append no changelog (append-only), sobrescreve handoff, atualiza mestre cirurgicamente, e fecha sessão com commit + push em dev (com aprovação). /otimizar-projeto faz higiene macro: split do mestre, compactação de aprendizados, arquivamento por idade. Changelog é imutável."
+      "description": "Memória de projeto em duas camadas (raiz permanente + memory/ transiente), operada como ROTEADOR: arquivos de boot com cap em palavras (mestre ~600, aprendizados ~800, handoff ~250), conteúdo profundo em satélites por trigger. /codex fecha sessão com replace+prune: tria memory/, registra cortes no changelog (append-only), SUBSTITUI status do mestre, GC de lições absorvidas, sobrescreve handoff, poda na hora se cap estourou, verifica integridade de pointers e claims de poda antes de gravar, e commit + push em dev (com aprovação) — modo multi-repo na mesma empresa via frontmatter empresa. /otimizar-projeto faz higiene macro + sweep de pointers dangling. Changelog é imutável."
     }
   ]
 }

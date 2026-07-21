@@ -1,16 +1,16 @@
 ---
 name: otimizar-projeto
-description: Use esta skill quando o usuário invocar "/otimizar-projeto", ou pedir para "otimizar memória do projeto", "split do mestre", "compactar aprendizados", "limpar memory antigo", "higiene do projeto". Operações pesadas de manutenção da memória do projeto: split do documento_mestre quando >300 linhas, compactação do aprendizados quando >150 linhas, scan e arquivamento de arquivos antigos no memory/. Plano antes de execução. NUNCA toca em changelog.md.
-version: 0.5.0
+description: Use esta skill quando o usuário invocar "/otimizar-projeto", ou pedir para "otimizar memória do projeto", "split do mestre", "compactar aprendizados", "limpar memory antigo", "higiene do projeto". Operações pesadas de manutenção da memória do projeto: splits estruturais em satélites, mesclagem de lições, scan e arquivamento de arquivos antigos no memory/, sweep de pointers dangling em todos os roteadores. Plano antes de execução. NUNCA toca em changelog.md. A contenção dos caps em palavras (mestre ~600 / aprendizados ~800 / handoff ~250) é responsabilidade do /codex a cada fechamento — esta skill é higiene macro sob demanda.
+version: 1.1.0
 ---
 
 # Otimizar Projeto — Higiene Macro da Memória
 
-Faz manutenção pesada de médio/longo prazo na memória do projeto. Complementa o `/codex` (que faz faxina por sessão). Esta skill é invocada **sob demanda** quando arquivos crescem além dos limites e precisam de operação estrutural (split, compactação, arquivamento).
+Faz manutenção pesada de médio/longo prazo na memória do projeto. Complementa o `/codex` (que faz replace+prune por sessão e **é o dono da contenção dos caps em palavras**). Esta skill é invocada **sob demanda** quando a estrutura precisa de operação macro (splits grandes, mesclagem, arquivamento por idade) — não é mais o mecanismo de resposta a cap estourado.
 
 ## Filosofia
 
-`/codex` mantém digest curto a cada sessão. Esta skill faz manutenção de **médio prazo**: split do mestre quando ele cresce (criando `<tema>_mestre.md` na raiz), compactação do `aprendizados.md` quando passa de 150 linhas, arquivamento de conteúdo antigo no `memory/`, e atualização da estrutura quando a árvore do projeto evolui.
+`/codex` mantém os arquivos de boot como roteadores curtos a cada sessão. Esta skill faz manutenção de **médio prazo**: splits estruturais criando `<tema>_mestre.md` na raiz, mesclagem de lições similares no `aprendizados.md`, arquivamento de conteúdo antigo no `memory/`, e atualização da estrutura quando a árvore do projeto evolui.
 
 Quatro princípios:
 
@@ -24,10 +24,10 @@ Quatro princípios:
 ```
 <projeto>/
 ├── CLAUDE.md
-├── documento_mestre.md      # OPERA: split em <tema>_mestre.md quando >300 linhas
-├── aprendizados.md          # OPERA: compactação quando >150 linhas
+├── documento_mestre.md      # OPERA: split estrutural em <tema>_mestre.md (cap ~600 palavras é do /codex)
+├── aprendizados.md          # OPERA: mesclagem de lições similares (cap ~800 palavras e GC são do /codex)
 ├── changelog.md             # NUNCA TOCA — imutável total
-├── <tema>_mestre.md         # OPERA: sub-split se >500 linhas
+├── <tema>_mestre.md         # OPERA: sub-split se >25KB
 └── memory/
     ├── handoff.md           # NÃO TOCA (responsabilidade do /codex)
     ├── arquivo/             # destino do conteúdo arquivado
@@ -42,7 +42,7 @@ Identificar o projeto ativo a partir do diretório de trabalho. Se ambíguo, ped
 
 ### Passo 2 — Scan e relatório de saúde
 
-Escanear todos os arquivos `.md` em `<projeto>/` (raiz) e `<projeto>/memory/`. Para cada arquivo coletar: nome, número de linhas, tamanho em KB, data da última modificação.
+Escanear todos os arquivos `.md` em `<projeto>/` (raiz) e `<projeto>/memory/`. Para cada arquivo coletar: nome, **número de palavras** (`wc -w` / `(Get-Content <arquivo> -Raw | Measure-Object -Word).Words`), tamanho em KB, data da última modificação.
 
 Apresentar tabela com semáforos:
 
@@ -51,42 +51,51 @@ Relatório de saúde — <projeto>
 Data: DD/MM/AAAA
 
 RAIZ
-| Arquivo | Linhas | Tamanho | Modificado | Status |
+| Arquivo | Palavras | Tamanho | Modificado | Status |
 |---|---|---|---|---|
-| documento_mestre.md | 487 | 28KB | hoje | 🔴 grande |
-| aprendizados.md | 178 | 12KB | hoje | 🟡 atenção |
-| changelog.md | 2400 | 145KB | hoje | — (sem cap) |
-| stripe_mestre.md | 240 | 15KB | DD/MM | 🟢 ok |
+| documento_mestre.md | 1.480 | 28KB | hoje | 🔴 acima do cap (600) |
+| aprendizados.md | 920 | 12KB | hoje | 🟡 atenção |
+| changelog.md | 24.000 | 145KB | hoje | — (sem cap) |
+| stripe_mestre.md | 2.400 | 15KB | DD/MM | 🟢 ok |
 
 MEMORY/
-| Arquivo | Linhas | Tamanho | Modificado | Status |
+| Arquivo | Palavras | Tamanho | Modificado | Status |
 |---|---|---|---|---|
-| handoff.md | 45 | 4KB | hoje | 🟢 ok |
-| feedback_old_thing.md | 32 | 1KB | há 100 dias | 🔴 antigo |
+| handoff.md | 210 | 4KB | hoje | 🟢 ok |
+| feedback_old_thing.md | 320 | 1KB | há 100 dias | 🔴 antigo |
 ```
 
-**Regras de semáforo:**
+**Regras de semáforo (em PALAVRAS — caps da convenção-roteador):**
 
 | Arquivo | 🟢 OK | 🟡 Atenção | 🔴 Ação |
 |---|---|---|---|
-| `documento_mestre.md` | <300 linhas | 300-500 | >500 → split obrigatório |
-| `<tema>_mestre.md` | <25KB / 500 linhas | 25-40KB | >40KB → sub-split |
-| `aprendizados.md` | <150 linhas | 150-200 | >200 → compactar |
-| `handoff.md` | — | — | (responsabilidade do /codex, ignorar) |
+| `documento_mestre.md` | ≤600 palavras | 600-900 | >900 → poda estrutural (status substitui, temas → satélites) |
+| `<tema>_mestre.md` | <25KB | 25-40KB | >40KB → sub-split |
+| `aprendizados.md` | ≤800 palavras | 800-1.200 | >1.200 → GC + mesclagem |
+| `handoff.md` | ≤250 palavras | — | (responsabilidade do /codex, ignorar) |
 | `changelog.md` | — | — | **NUNCA TOCA — sem cap** |
 | Arquivos em `memory/` | <60 dias sem mod | 60-90 dias | >90 dias |
+
+> 🟡/🔴 na raiz indica que o `/codex` deixou cap estourado passar — sinal de fechamento incompleto, não de fluxo normal. Esta skill corrige o acumulado; a contenção contínua é do `/codex`.
+
+### Passo 2.5 — Varredura de integridade de pointers (rot herdado)
+
+O `/codex` checa pointers só nos arquivos que toca na sessão (Passo 9.5 da skill). Esta skill é o lugar do **sweep completo**: varrer TODOS os pointers de TODOS os roteadores, não só os tocados — senão o rot acumulado nunca é colhido (pointer-rot compõe a cada run e pode ficar dangling por semanas).
+
+Para cada referência a arquivo (`<tema>_mestre.md`, `memory/*.md`, `.agents/*`, `index.md`, qualquer `<nome>.md`) em `documento_mestre.md`, `aprendizados.md` e em cada `<tema>_mestre.md` da raiz, checar existência no disco (`test -e` / `Test-Path`). Toda referência dangling vira item de plano no Passo 4 (categoria "LIMPEZA DE POINTERS"): limpar a referência morta ou recriar o arquivo. `changelog.md` não é varrido (imutável) e suas refs históricas não contam como rot.
 
 ### Passo 3 — Análise profunda
 
 Para cada arquivo 🔴 ou 🟡, analisar conteúdo e propor ação.
 
-**Para `documento_mestre.md` >300 linhas:**
-- Identificar seções com 50+ linhas sobre tema único.
-- Cada candidato vira proposta de satélite `<tema>_mestre.md` na **raiz** (não em memory/).
+**Para `documento_mestre.md` acima do cap (~600 palavras):**
+- Identificar temas com >~150 palavras sobre assunto único.
+- Cada candidato vira proposta de satélite `<tema>_mestre.md` na **raiz** (não em memory/), com 1 linha de ponteiro no Mapa de satélites.
+- Status empilhado ("Estado anterior...") e seção "Decisões-chave" legada → migrar pro changelog.
 
-**Para `aprendizados.md` >150 linhas:**
+**Para `aprendizados.md` acima do cap (~800 palavras):**
 - Identificar entradas duplicadas ou similares para mesclar.
-- Identificar lições antigas (referenciadas no changelog há >90 dias) candidatas a remover.
+- Identificar lições absorvidas (viraram regra no mestre, satélite, skill ou convenção) candidatas a GC.
 - Identificar lições que viraram regra permanente (deveriam ter subido pro mestre via /codex mas escaparam).
 
 **Para arquivos em `memory/` >90 dias:**
@@ -94,7 +103,7 @@ Para cada arquivo 🔴 ou 🟡, analisar conteúdo e propor ação.
 - Se deveria ter virado regra, propor promoção pro mestre + apagamento.
 - Se é histórico não-essencial, propor mover para `memory/arquivo/`.
 
-**Para `<tema>_mestre.md` >500 linhas:**
+**Para `<tema>_mestre.md` >25KB:**
 - Identificar sub-temas para split em sub-satélite (mesma convenção, ex: `stripe_webhooks_mestre.md` saindo de `stripe_mestre.md`).
 
 ### Passo 4 — Plano de ação
@@ -112,9 +121,13 @@ COMPACTAÇÃO DE APRENDIZADOS (X ações)
 3. [aprendizados.md] Mesclar 4 entradas similares na seção Segurança em 1 entrada consolidada
 4. [aprendizados.md] Promover regra "X" da seção Process para o mestre (deveria ter ido via /codex)
 
+LIMPEZA DE POINTERS (X ações)
+5. [documento_mestre.md] ref dangling `index.md` (deletado em DD/MM) → remover do Mapa de satélites
+6. [aprendizados.md] ref dangling `memory/project_foo.md` → remover
+
 ARQUIVAMENTO DE MEMORY/ (X ações)
-5. [memory/feedback_old_thing.md] >100 dias, conteúdo já refletido em código → memory/arquivo/
-6. [memory/project_dead.md] decisão revertida em sessão posterior → memory/arquivo/
+7. [memory/feedback_old_thing.md] >100 dias, conteúdo já refletido em código → memory/arquivo/
+8. [memory/project_dead.md] decisão revertida em sessão posterior → memory/arquivo/
 
 SUB-SPLIT (X ações)
 7. [stripe_mestre.md] Seção "Webhooks" (110 linhas) → criar stripe_webhooks_mestre.md na raiz
@@ -147,9 +160,9 @@ Para cada split aprovado:
 
    <conteúdo completo da seção>
    ```
-3. No `documento_mestre.md`, substituir a seção original por ponteiro de 2-3 linhas:
+3. No `documento_mestre.md`, substituir a seção original por 1 linha no **Mapa de satélites**:
    ```markdown
-   > **<TEMA>:** <resumo de 1-2 linhas>. Ver `<tema>_mestre.md`.
+   - <Tema> (<3-5 palavras do conteúdo>) → `<tema>_mestre.md`
    ```
 
 **Convenção de nomes:**
@@ -195,13 +208,13 @@ Otimização concluída ✓
 
 | Arquivo | Antes | Depois | Δ |
 |---|---|---|---|
-| documento_mestre.md | 487 linhas | 220 linhas | -55% |
-| aprendizados.md | 178 linhas | 142 linhas | -20% |
+| documento_mestre.md | 1.480 palavras | 540 palavras | -64% |
+| aprendizados.md | 920 palavras | 710 palavras | -23% |
 
 Novos satélites criados (raiz):
-- stripe_mestre.md (62 linhas)
-- compliance_mestre.md (55 linhas)
-- stripe_webhooks_mestre.md (110 linhas, sub-split)
+- stripe_mestre.md (620 palavras)
+- compliance_mestre.md (480 palavras)
+- stripe_webhooks_mestre.md (sub-split)
 
 Arquivados:
 - memory/arquivo/feedback_old_thing.md (registrado no changelog)
@@ -224,6 +237,7 @@ Se restou item 🟡/🔴 não aprovado:
 - **Nunca apagar conteúdo direto** — sempre move (changelog, satélite ou `memory/arquivo/`).
 - **Nunca criar mais de 3 satélites por execução** — anti-fragmentação.
 - **Nunca quebrar links bidirecionais** — todo `<tema>_mestre.md` tem header `> Documento pai: documento_mestre.md`, e o mestre tem ponteiro descendente.
+- **Sweep de pointers a cada execução** (Passo 2.5) — varrer TODOS os roteadores, não só os tocados; toda ref dangling vira item de plano. É o lugar do rot herdado acumulado; o /codex só pega o da própria sessão.
 - **Sempre ler o arquivo antes de alterar** — nada de editar sem entender o conteúdo.
 - **Sempre mostrar antes/depois** para alterações em arquivos existentes.
 - **Idioma:** PT-BR para todos os arquivos de memória.
@@ -235,9 +249,10 @@ Se restou item 🟡/🔴 não aprovado:
 
 ## Quando invocar
 
-- `/codex` reportou mestre 🟡 ou 🔴 (>300 ou >500 linhas)
-- `aprendizados.md` passou de 150 linhas
+- Projeto legado pré-reforma com mestre/aprendizados muito acima dos caps em palavras (poda retroativa estrutural)
 - Arquivos em `memory/` há mais de 90 dias acumulando
 - Mensal como higiene preventiva
 - Antes de uma sessão longa, para limpar o terreno
 - Quando o usuário pede explicitamente: "otimizar projeto", "split do mestre", "limpar memory antigo", "compactar aprendizados"
+
+> Cap estourado num fechamento normal NÃO é trigger desta skill — o `/codex` poda na própria execução.
