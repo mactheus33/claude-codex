@@ -1,7 +1,7 @@
 ---
 name: codex
 description: Use esta skill quando o usuário invocar "/codex", ou pedir para "encerrar a sessão", "fechar", "salvar handoff", "atualizar memória do projeto", "compactar memória", "escrever resumo de sessão", "limpar memory", ou qualquer frase indicando que a sessão deve ser encerrada. Faz faxina completa do memory/ do projeto, sintetiza conteúdo (regras → mestre, lições → aprendizados, notas granulares → changelog), sobrescreve handoff e atualiza documento_mestre cirurgicamente. Escreve apenas após aprovação.
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Codex — Faxineiro de Sessão + Rolling Digest
@@ -208,7 +208,9 @@ Após gravação aprovada (Passo 11), fechar a sessão no Git. Resolve o empilha
 Antes de qualquer commit, **detectar quantos repos estão dirty** e classificar:
 
 1. **Repo do projeto ativo** — sempre o primeiro candidato. `git status` lá.
-2. **Outros repos da mesma empresa** — descobrir via frontmatter `empresa: <slug>` no `<projeto>/CLAUDE.md` (convenção em `~/.claude/shared/memory-convention.md`). Escanear `~/projetos-claude/*/CLAUDE.md`, filtrar pelo slug da empresa ativa, rodar `git status` em cada.
+2. **Outros repos da mesma empresa** — descobrir via frontmatter `empresa: <slug>` no `<projeto>/CLAUDE.md` (convenção em `~/.claude/shared/memory-convention.md`). Escanear `~/projetos-claude/*/CLAUDE.md`, filtrar pelo slug da empresa ativa, rodar `git status` em cada. **Duas exclusões estruturais:**
+   - **Projeto de workspace** (frontmatter `workspace: <slug>` — `solum-itto`, `pessoal` — em vez de `empresa:`): **não tem escopo multi-repo**. Cada projeto de workspace é uma ilha; o modo multi-repo não se aplica e o /codex sai pelo fluxo single-repo. Não escanear irmãos por `workspace:` — o balde não é empresa e não compartilha infra/cliente.
+   - **Repo com `congelado: true`**: fica **fora** do commit multi-repo mesmo se dirty. Congelar existe justamente pra parar de tocar nele. Se aparecer dirty, apenas **reportar** ("`<repo>` está congelado e dirty — fora do escopo; resolver em sessão dedicada") e seguir.
 3. **Cross-empresa** — se `git status` revelar dirty em repo de outra empresa, **bloquear**: "Detectei dirty em `<repo>` que pertence a `<outra-empresa>`. /codex não cruza empresas. Resolva manualmente."
 4. **Meta-projeto (`~/.claude/`)** — caso especial. Se sessão é modo claude-identity, ele é o repo "ativo" e sai pelo fluxo padrão (sem multi-repo). Se sessão é de projeto e `~/.claude/` aparece dirty, isso é cross-escopo (não cross-empresa) — pausar e pedir orientação ao usuário.
 
@@ -299,7 +301,7 @@ Múltiplos repos da mesma empresa estão dirty (ex: sessão tocou `projeto-alfa`
 6. **Anti-fragmentação na criação de `<tema>_mestre.md`.** Promover pra raiz só quando o conteúdo é fonte de verdade de um tema único e persistente com >~150 palavras. Não promover por impulso.
 7. **Recados cross-project / cross-sessão** vão para o **inbox do destino**: `<projeto-destino>/inbox.md` na raiz do projeto-destino (ou `~/.claude/inbox.md` se o destino é o meta-projeto). Append de um bloco `## <data> · [ação|aprendizado]`, nunca tocar outros arquivos do repo de outro projeto. Cada projeto tem sua própria caixa, isolada por repo — não há inbox global compartilhado entre destinos. Inversamente, ao processar o projeto ativo, drenar o `<projeto-ativo>/inbox.md`: aplicar cada bloco, registrar no changelog, remover o bloco. (Modelo de duas caixas desde 2026-06-05; `incoming-learnings.md` por-projeto e o inbox global único foram ambos aposentados — não criar nem escrever neles.)
 8. **Idioma:** todos os arquivos de memória em PT-BR. Comunicação técnica com Claude Code/SDK/MCP/docs Anthropic em EN naturalmente.
-9. **Commit final em `dev`, sempre com aprovação explícita.** /codex nunca commita em `main`. Nunca commita sem mostrar `git status` e pedir "aprova?". Sem flag de auto-commit. Sem force push. **Multi-repo da mesma empresa permitido** (Passo 12 modo multi-repo) — cross-empresa **bloqueia**.
+9. **Commit final em `dev`, sempre com aprovação explícita.** /codex nunca commita em `main`. Nunca commita sem mostrar `git status` e pedir "aprova?". Sem flag de auto-commit. Sem force push. **Multi-repo da mesma empresa permitido** (Passo 12 modo multi-repo) — cross-empresa **bloqueia**; projeto de `workspace:` é ilha (só single-repo) e repo `congelado: true` fica fora.
 10. **Nunca afirmar destino não-verificado nem carregar pointer dangling** (Passo 9.5). Claim de poda ("X → virou regra em Y" / "seção deletada → tudo no changelog") só vai pro changelog depois de confirmado no destino por `grep`; senão corrige o gap ou reescreve como "removido (rastro só no git/changelog)". Referência a arquivo nos roteadores só fica se o arquivo existe no disco.
 
 ## Exemplo de saída
