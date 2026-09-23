@@ -20,8 +20,10 @@ Memória que só cresce vira ruído — e boot afogado em acervo faz o agente pa
 
 ## Estrutura de duas camadas
 
+`<memória>` é a **base resolvida no Passo 1** — a raiz do repo num projeto do Matheus, uma pasta em `~/.claude/orgs/` num repo de org compartilhada. Toda referência a arquivo de memória abaixo e no workflow inteiro é relativa a `<memória>`.
+
 ```
-<projeto>/
+<memória>/
 ├── CLAUDE.md                # 0. institucional + arquitetura
 ├── documento_mestre.md      # 1. PERMANENTE: ÍNDICE — status + pendências vivas + regras + mapa de satélites (BOOTSTRAP, ~600 palavras)
 ├── aprendizados.md          # 2. PERMANENTE: lições que ainda mudam comportamento (BOOTSTRAP, ~800 palavras)
@@ -35,23 +37,31 @@ Memória que só cresce vira ruído — e boot afogado em acervo faz o agente pa
 
 ## Workflow
 
-### Passo 1 — Confirmar projeto
+### Passo 1 — Confirmar projeto e resolver `<memória>`
 
-Identificar o projeto ativo a partir do diretório de trabalho. Se ambíguo, pedir confirmação. Se `<projeto>/documento_mestre.md` não existir, parar e sugerir bootstrap via templates em `~/.claude/shared/memory-template/raiz/`.
+Identificar o projeto ativo a partir do diretório de trabalho. Se ambíguo, pedir confirmação.
+
+**Resolver onde a memória mora — pelo remote do git, nunca por frontmatter:**
+
+1. `git -C <repo> remote get-url origin` → extrair `owner/repo`.
+2. Se `owner` aparece na coluna `org` de `~/.claude/orgs/registry.md` → **repo de org compartilhada**: `<memória>` = `~/.claude/orgs/<org>/<repo>/`. O repo em si é **read-only pra memória** — nada de `documento_mestre.md`, `aprendizados.md`, `changelog.md`, `inbox.md`, `memory/` ou frontmatter nosso entra lá. Motivo: o dono do repo não mantém os nossos documentos, então um canônico guardado lá envelhece afirmando status vencido; e um ponteiro no `CLAUDE.md` dele carregaria o nosso estado como contexto de abertura da sessão dele.
+3. Qualquer outro owner, ou sem remote → **repo do Matheus**: `<memória>` = raiz do repo. Comportamento de sempre.
+
+Se `<memória>/documento_mestre.md` não existir, parar e sugerir bootstrap via templates em `~/.claude/shared/memory-template/raiz/` (num repo de org compartilhada, criar a pasta em `~/.claude/orgs/<org>/<repo>/`, nunca no repo).
 
 ### Passo 2 — Ler camada permanente
 
-Ler em ordem (todos da raiz do projeto):
-- `<projeto>/documento_mestre.md`
-- `<projeto>/aprendizados.md`
-- `<projeto>/memory/handoff.md`
+Ler em ordem (todos em `<memória>`, resolvido no Passo 1):
+- `<memória>/documento_mestre.md`
+- `<memória>/aprendizados.md`
+- `<memória>/memory/handoff.md`
 
-`<projeto>/changelog.md` **não** é lido automaticamente — só se a sessão pediu busca histórica.
-`<projeto>/<tema>_mestre.md` **não** são lidos automaticamente — só os relevantes ao trabalho da sessão.
+`<memória>/changelog.md` **não** é lido automaticamente — só se a sessão pediu busca histórica.
+`<memória>/<tema>_mestre.md` **não** são lidos automaticamente — só os relevantes ao trabalho da sessão.
 
 ### Passo 3 — Escanear memory/
 
-Listar todos os arquivos em `<projeto>/memory/` (exceto `handoff.md`). Para cada um, identificar:
+Listar todos os arquivos em `<memória>/memory/` (exceto `handoff.md`). Para cada um, identificar:
 - **Origem temporal:** criado/modificado nesta sessão? Em sessão anterior?
 - **Tipo de conteúdo:** rascunho, decisão, gotcha técnico, status update, registro de ação
 - **Relevância atual:** ainda válido? Já obsoleto?
@@ -210,7 +220,7 @@ Antes de qualquer commit, **detectar quantos repos estão dirty** e classificar:
 1. **Repo do projeto ativo** — sempre o primeiro candidato. `git status` lá.
 2. **Outros repos da mesma empresa** — descobrir via frontmatter `empresa: <slug>` no `<projeto>/CLAUDE.md` (convenção em `~/.claude/shared/memory-convention.md`). Escanear `~/projetos-claude/*/CLAUDE.md`, filtrar pelo slug da empresa ativa, rodar `git status` em cada. **Duas exclusões estruturais:**
    - **Projeto de workspace** (frontmatter `workspace: <slug>` — `solum-itto`, `pessoal` — em vez de `empresa:`): **não tem escopo multi-repo**. Cada projeto de workspace é uma ilha; o modo multi-repo não se aplica e o /codex sai pelo fluxo single-repo. Não escanear irmãos por `workspace:` — o balde não é empresa e não compartilha infra/cliente.
-   - **Repo com `org: <github-org>`** (mora em org GitHub compartilhada, ex. `blackwall-consult`): fica **fora** do commit multi-repo, dirty ou não. Outra pessoa commita ali — varrer o dirty dela seria commitar trabalho alheio em nome dele. Não rodar `git status` nesses repos; apenas **reportar** ("`<repo>` é da org `<org>` — fora do escopo multi-repo; commit lá é da sessão dedicada, no fluxo que o CLAUDE.md do repo declara") e seguir.
+   - **Repo listado em `~/.claude/orgs/registry.md`** (mora em org GitHub compartilhada, ex. `blackwall-consult`): fica **fora** do commit multi-repo, dirty ou não. Outra pessoa commita ali — varrer o dirty dela seria commitar trabalho alheio em nome dele. A detecção é pelo **remote** (`owner/repo` do origin casando com uma linha do registry), não por frontmatter: repo de org não carrega frontmatter nosso. Não rodar `git status` nesses repos; apenas **reportar** ("`<repo>` é da org `<org>` — fora do escopo multi-repo; commit lá é da sessão dedicada, no fluxo que o CLAUDE.md do repo declara") e seguir. **A memória dele não está lá** — está em `~/.claude/orgs/<org>/<repo>/`, que é escrita pelo fluxo normal deste passo (o repo ativo pra memória é o `~/.claude`).
    - **Repo com `congelado: true`**: fica **fora** do commit multi-repo mesmo se dirty. Congelar existe justamente pra parar de tocar nele. Se aparecer dirty, apenas **reportar** ("`<repo>` está congelado e dirty — fora do escopo; resolver em sessão dedicada") e seguir.
 3. **Cross-empresa** — se `git status` revelar dirty em repo de outra empresa, **bloquear**: "Detectei dirty em `<repo>` que pertence a `<outra-empresa>`. /codex não cruza empresas. Resolva manualmente."
 4. **Meta-projeto (`~/.claude/`)** — caso especial. Se sessão é modo claude-identity, ele é o repo "ativo" e sai pelo fluxo padrão (sem multi-repo). Se sessão é de projeto e `~/.claude/` aparece dirty, isso é cross-escopo (não cross-empresa) — pausar e pedir orientação ao usuário.
@@ -294,13 +304,15 @@ Múltiplos repos da mesma empresa estão dirty (ex: sessão tocou `projeto-alfa`
 
 ## Regras invioláveis
 
+0. **Nunca escrever memória num repo de org compartilhada.** Se o remote do repo ativo casa com uma linha de `~/.claude/orgs/registry.md`, a cadeia inteira (mestre, aprendizados, changelog, inbox, handoff, satélites) mora em `~/.claude/orgs/<org>/<repo>/` e o repo do parceiro não recebe nem arquivo, nem frontmatter, nem ponteiro. Um canônico que só um lado mantém passa a afirmar status vencido com cara de autoridade, e um ponteiro no `CLAUDE.md` de lá carrega o nosso estado pra dentro da sessão dele.
+
 1. **Um projeto ativo por invocação para edição de memória.** Triagem de `memory/`, edição de mestre/aprendizados/handoff/changelog acontecem **apenas no projeto ativo da sessão**. Nunca gravar em memória de outro projeto. (Exceção do Passo 12 é apenas commit/push de dirty pré-existente, sem editar conteúdo.)
 2. **`changelog.md` é append-only.** NUNCA editar entradas antigas. NUNCA apagar.
 3. **`<tema>_mestre.md` na raiz nunca são apagados.** /codex pode **criá-los** (roteamento de tema >~150 palavras saindo do mestre) e atualizar o ponteiro no mestre; compactação interna e sub-split são de `/otimizar-projeto` ou humano.
 4. **Apagar satélite só depois de capturar em changelog ou outro destino.** Lixo verificadamente redundante pode ir direto.
 5. **Triagem sempre passa por aprovação.** Sem aprovação, não apaga, não grava.
 6. **Anti-fragmentação na criação de `<tema>_mestre.md`.** Promover pra raiz só quando o conteúdo é fonte de verdade de um tema único e persistente com >~150 palavras. Não promover por impulso.
-7. **Recados cross-project / cross-sessão** vão para o **inbox do destino**: `<projeto-destino>/inbox.md` na raiz do projeto-destino (ou `~/.claude/inbox.md` se o destino é o meta-projeto). Append de um bloco `## <data> · [ação|aprendizado]`, nunca tocar outros arquivos do repo de outro projeto. Cada projeto tem sua própria caixa, isolada por repo — não há inbox global compartilhado entre destinos. Inversamente, ao processar o projeto ativo, drenar o `<projeto-ativo>/inbox.md`: aplicar cada bloco, registrar no changelog, remover o bloco. (Modelo de duas caixas desde 2026-06-05; `incoming-learnings.md` por-projeto e o inbox global único foram ambos aposentados — não criar nem escrever neles.)
+7. **Recados cross-project / cross-sessão** vão para o **inbox do destino**: `<memória-destino>/inbox.md` (raiz do projeto-destino; `~/.claude/orgs/<org>/<repo>/inbox.md` se o destino é repo de org compartilhada; `~/.claude/inbox.md` se o destino é o meta-projeto). Append de um bloco `## <data> · [ação|aprendizado]`, nunca tocar outros arquivos do repo de outro projeto. Cada projeto tem sua própria caixa, isolada por repo — não há inbox global compartilhado entre destinos. Inversamente, ao processar o projeto ativo, drenar o `<projeto-ativo>/inbox.md`: aplicar cada bloco, registrar no changelog, remover o bloco. (Modelo de duas caixas desde 2026-06-05; `incoming-learnings.md` por-projeto e o inbox global único foram ambos aposentados — não criar nem escrever neles.)
 8. **Idioma:** todos os arquivos de memória em PT-BR. Comunicação técnica com Claude Code/SDK/MCP/docs Anthropic em EN naturalmente.
 9. **Commit final em `dev`, sempre com aprovação explícita.** /codex nunca commita em `main`. Nunca commita sem mostrar `git status` e pedir "aprova?". Sem flag de auto-commit. Sem force push. **Multi-repo da mesma empresa permitido** (Passo 12 modo multi-repo) — cross-empresa **bloqueia**; projeto de `workspace:` é ilha (só single-repo), e repo `congelado: true` ou `org: <github-org>` fica fora.
 10. **Nunca afirmar destino não-verificado nem carregar pointer dangling** (Passo 9.5). Claim de poda ("X → virou regra em Y" / "seção deletada → tudo no changelog") só vai pro changelog depois de confirmado no destino por `grep`; senão corrige o gap ou reescreve como "removido (rastro só no git/changelog)". Referência a arquivo nos roteadores só fica se o arquivo existe no disco.
