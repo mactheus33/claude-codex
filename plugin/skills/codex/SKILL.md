@@ -1,7 +1,7 @@
 ---
 name: codex
 description: Use esta skill quando o usuário invocar "/codex", ou pedir para "encerrar a sessão", "fechar", "salvar handoff", "atualizar memória do projeto", "compactar memória", "escrever resumo de sessão", "limpar memory", ou qualquer frase indicando que a sessão deve ser encerrada. Faz faxina completa do memory/ do projeto, sintetiza conteúdo (regras → mestre, lições → aprendizados, notas granulares → changelog), sobrescreve handoff e atualiza documento_mestre cirurgicamente. Escreve apenas após aprovação.
-version: 1.2.0
+version: 1.4.0
 ---
 
 # Codex — Faxineiro de Sessão + Rolling Digest
@@ -197,8 +197,9 @@ Antes de gravar **qualquer coisa**, exibir ao usuário:
 5. **Diff do documento_mestre.md** (mudanças cirúrgicas, incluindo status substituído e pendências removidas)
 6. **Resumo numérico:** "Triados N satélites: K promovidos, L consolidados, M registrados no changelog, P apagados. GC removeu Q lições absorvidas. Mestre: X palavras / aprendizados: Y palavras / handoff: Z palavras (caps 600/800/250)."
 7. **Resultado da verificação de integridade (Passo 9.5):** pointers dangling encontrados (e ação tomada) + claims de poda confirmados / corrigidos / reescritos. "Nenhum" explícito se passou limpo.
+8. **Plano de commit (Passo 12):** rodar antes a detecção de escopo e o branch enforcement do Passo 12 e mostrar, por repo, `git status --short` resumido + a mensagem de commit composta. Repos bloqueados (branch ≠ `dev`, cross-empresa, congelado, org compartilhada) aparecem aqui como fora, com o motivo.
 
-Perguntar: **"Aprova para gravar?"**
+Perguntar uma vez só: **"Aprova gravar e commitar?"** — cobre drafts e plano de commit. Respostas parciais valem ("grava, mas não commita"; "aprovo 1, 3").
 
 ### Passo 11 — Gravar apenas após aprovação
 
@@ -242,16 +243,9 @@ Apenas o repo do projeto ativo está dirty. Fluxo simples:
    - **Título:** `chore(memory): <título da sessão do handoff>` — mesmo título usado no changelog (Passo 6).
    - **Body:** os 5 primeiros bullets da seção "Decisões / mudanças" da entrada do changelog. Se houver menos, listar todos. Se houver mais, truncar a 5 e omitir o resto.
 
-3. **Pedir aprovação explícita:**
-   > "Vou commitar TUDO acima em `dev` e dar push com a mensagem:
-   > ```
-   > <título>
-   >
-   > <body>
-   > ```
-   > Aprova?"
+3. **Aprovação:** já veio no Passo 10, junto com os drafts. Não perguntar de novo — exceto se o `git status` pós-gravação trouxer arquivo fora do plano mostrado; aí mostrar a diferença e pedir aprovação só dela.
 
-   Default seguro: sem "sim" explícito, **não commita**.
+   Default seguro: sem "sim" explícito no Passo 10, **não commita**.
 
 4. **Após aprovação:**
    - `git add -A`
@@ -274,7 +268,7 @@ Múltiplos repos da mesma empresa estão dirty (ex: sessão tocou `projeto-alfa`
    - Repos editados na sessão: mesmo formato do single-repo (título + 5 bullets), mas **filtrar bullets relevantes àquele repo** quando possível (se a entrada do changelog tem decisões que tocam só um repo, a mensagem dele só leva esses bullets).
    - Repos com dirty drift: título "chore(saneamento): dirty drift detectado em bootstrap" + body listando os arquivos commitados.
 
-4. **Pedir aprovação consolidada:**
+4. **Plano consolidado** (mostrado no item 8 do Passo 10 e aprovado lá; mesma regra de exceção do single-repo):
    > "Vou commitar **N repos** da empresa `<slug>` em sequência:
    >
    > **Repo 1: `<nome>`** (editado nesta sessão)
@@ -314,7 +308,7 @@ Múltiplos repos da mesma empresa estão dirty (ex: sessão tocou `projeto-alfa`
 6. **Anti-fragmentação na criação de `<tema>_mestre.md`.** Promover pra raiz só quando o conteúdo é fonte de verdade de um tema único e persistente com >~150 palavras. Não promover por impulso.
 7. **Recados cross-project / cross-sessão** vão para o **inbox do destino**: `<memória-destino>/inbox.md` (raiz do projeto-destino; `~/.claude/orgs/<org>/<repo>/inbox.md` se o destino é repo de org compartilhada; `~/.claude/inbox.md` se o destino é o meta-projeto). Append de um bloco `## <data> · [ação|aprendizado]`, nunca tocar outros arquivos do repo de outro projeto. Cada projeto tem sua própria caixa, isolada por repo — não há inbox global compartilhado entre destinos. Inversamente, ao processar o projeto ativo, drenar o `<projeto-ativo>/inbox.md`: aplicar cada bloco, registrar no changelog, remover o bloco. (Modelo de duas caixas desde 2026-06-05; `incoming-learnings.md` por-projeto e o inbox global único foram ambos aposentados — não criar nem escrever neles.)
 8. **Idioma:** todos os arquivos de memória em PT-BR. Comunicação técnica com Claude Code/SDK/MCP/docs Anthropic em EN naturalmente.
-9. **Commit final em `dev`, sempre com aprovação explícita.** /codex nunca commita em `main`. Nunca commita sem mostrar `git status` e pedir "aprova?". Sem flag de auto-commit. Sem force push. **Multi-repo da mesma empresa permitido** (Passo 12 modo multi-repo) — cross-empresa **bloqueia**; projeto de `workspace:` é ilha (só single-repo), e repo `congelado: true` ou `org: <github-org>` fica fora.
+9. **Commit final em `dev`, sempre com aprovação explícita** — a do Passo 10, que cobre drafts e plano de commit numa pergunta só. /codex nunca commita em `main`. Nunca commita sem ter mostrado `git status` e a mensagem. Sem flag de auto-commit. Sem force push. **Multi-repo da mesma empresa permitido** (Passo 12 modo multi-repo) — cross-empresa **bloqueia**; projeto de `workspace:` é ilha (só single-repo), e repo `congelado: true` ou listado em `~/.claude/orgs/registry.md` fica fora.
 10. **Nunca afirmar destino não-verificado nem carregar pointer dangling** (Passo 9.5). Claim de poda ("X → virou regra em Y" / "seção deletada → tudo no changelog") só vai pro changelog depois de confirmado no destino por `grep`; senão corrige o gap ou reescreve como "removido (rastro só no git/changelog)". Referência a arquivo nos roteadores só fica se o arquivo existe no disco.
 
 ## Exemplo de saída

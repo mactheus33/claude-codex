@@ -1,7 +1,7 @@
 ---
 name: otimizar-projeto
 description: Use esta skill quando o usuário invocar "/otimizar-projeto", ou pedir para "otimizar memória do projeto", "split do mestre", "compactar aprendizados", "limpar memory antigo", "higiene do projeto". Operações pesadas de manutenção da memória do projeto: splits estruturais em satélites, mesclagem de lições, scan e arquivamento de arquivos antigos no memory/, sweep de pointers dangling em todos os roteadores. Plano antes de execução. NUNCA toca em changelog.md. A contenção dos caps em palavras (mestre ~600 / aprendizados ~800 / handoff ~250) é responsabilidade do /codex a cada fechamento — esta skill é higiene macro sob demanda.
-version: 1.1.0
+version: 1.4.0
 ---
 
 # Otimizar Projeto — Higiene Macro da Memória
